@@ -1,0 +1,7 @@
+# Windows 系統檔案
+$RECYCLE.BIN/
+System Volume Information/
+Thumbs.db
+desktop.ini
+*.tmp
+*.exe
