@@ -1,0 +1,707 @@
+\documentclass[preprint,11pt]{elsarticle}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+
+% --- convenience macros ---
+\newcommand{\cs}{c_s}
+\newcommand{\eq}{\mathrm{eq}}
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\Deltafour}{\Delta_{\alpha\beta\gamma\delta}}
+\newcommand{\sumi}{\sum_i}
+
+\journal{Notes on the lattice Boltzmann equilibrium moment hierarchy}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{On the velocity moments of the lattice Boltzmann equilibrium:
+second- and third-order results, and the structural cubic defect of the
+D3Q27 lattice}
+
+\author{Peng-Chung Chen}
+\address{Computational Fluid Dynamics Laboratory, Department of Power
+Mechanical Engineering, National Tsing Hua University, Hsinchu 30013, Taiwan}
+
+\begin{abstract}
+The discrete velocity moments of the lattice Boltzmann (LB) equilibrium are
+frequently quoted in two superficially contradictory forms in the
+literature: a kinetic-theory form that carries the cubic velocity term
+$\rho\,u_\alpha u_\beta u_\gamma$ at third order, and a discrete form that does
+not. We resolve this apparent contradiction by deriving, from first
+principles and in full, four distinct objects: the second- and third-order
+moments of (i) the continuous Maxwell--Boltzmann distribution and (ii) the
+standard second-order Hermite-truncated discrete equilibrium. We show that
+the two frameworks agree \emph{exactly} at second order, whereas at third
+order the discrete equilibrium omits precisely $\rho\,u_\alpha u_\beta
+u_\gamma$. The algebraic origin of the omission is identified as the parity of
+the highest lattice moment entering the quadratic part of the equilibrium.
+We then analyse the D3Q27 lattice component by component and prove that the
+fully diagonal third-order moment $\Pi_{\alpha\alpha\alpha}$ is locked to
+$\rho u_\alpha$ by the cubic identity $c_{i\alpha}^{3}=c_{i\alpha}$,
+independently of the equilibrium; consequently the diagonal cubic term cannot
+be restored by \emph{any} Hermite extension on a three-speed lattice, while
+the mixed components are recoverable. The result is connected to the
+$O(\mathrm{Ma}^{3})$ Galilean-invariance error of standard LB and to its
+resolution through the cumulant collision operator, whose equilibrium
+possesses only a finite number of non-vanishing cumulants.
+\end{abstract}
+
+\begin{keyword}
+lattice Boltzmann method \sep equilibrium distribution \sep velocity moments
+\sep Hermite expansion \sep Galilean invariance \sep cumulant collision
+operator \sep D3Q27
+\end{keyword}
+
+\end{frontmatter}
+
+\section{Introduction}
+\label{sec:intro}
+
+The lattice Boltzmann (LB) method recovers the Navier--Stokes equations
+through the velocity moments of a discrete equilibrium distribution
+$f_i^{\eq}$ defined on a finite velocity set $\{\mathbf{c}_i\}_{i=0}^{Q-1}$
+with weights $\{w_i\}$ \citep{Qian1992,HeLuo1997,Kruger2017}. Because the
+hydrodynamic stress is built from the second- and third-order moments of
+$f_i^{\eq}$, the precise form of these moments determines which macroscopic
+equations the scheme realises and at what order in the Mach number.
+
+A recurring source of confusion is that the third-order moment is reported in
+two different forms. Derivations that begin from continuous kinetic theory
+(e.g.\ \citealp{HeLuo1997,ShanYuanChen2006}) list the third moment of the
+\emph{full} Maxwell--Boltzmann distribution, which contains the cubic term
+$\rho\,u_\alpha u_\beta u_\gamma$. Treatments that report the moment actually
+realised by the standard second-order discrete equilibrium (e.g.\ the
+textbook account of \citealp{Kruger2017}) omit this term. The two statements
+are not in conflict: they describe different objects. The purpose of this
+note is to make that distinction completely explicit by deriving all four
+quantities --- the second- and third-order moments of the continuous
+Maxwellian and of the discrete equilibrium --- and then to examine what the
+D3Q27 lattice can and cannot represent.
+
+The note is organised as follows. Section~\ref{sec:prelim} fixes the
+continuous and discrete frameworks and states the two sets of moment
+identities that every subsequent calculation reduces to.
+Section~\ref{sec:second} treats the second-order moment and establishes exact
+agreement between the two frameworks. Section~\ref{sec:third} treats the
+third-order moment and isolates the cubic discrepancy.
+Section~\ref{sec:d3q27} analyses the D3Q27 lattice component by component.
+Section~\ref{sec:concl} collects the consequences for Galilean invariance and
+for the cumulant collision operator.
+
+\section{Preliminaries}
+\label{sec:prelim}
+
+\subsection{Continuous framework}
+
+The continuous Maxwell--Boltzmann equilibrium in $D$ dimensions is
+\begin{equation}
+f^{\eq}(\boldsymbol{\xi})
+=\frac{\rho}{(2\pi \cs^{2})^{D/2}}
+\exp\!\left(-\frac{|\boldsymbol{\xi}-\mathbf{u}|^{2}}{2\cs^{2}}\right),
+\label{eq:maxwell}
+\end{equation}
+where $\boldsymbol{\xi}$ is the microscopic velocity, $\rho$ the density,
+$\mathbf{u}$ the macroscopic velocity and $\cs^{2}=RT$ the isothermal sound
+speed squared. Define the ensemble average
+$\langle\phi\rangle\equiv\int \phi\, f^{\eq}\dd^{D}\xi$ and the peculiar
+velocity $\mathbf{C}=\boldsymbol{\xi}-\mathbf{u}$, so that under $\mathbf{C}$
+the distribution \eqref{eq:maxwell} is a zero-mean isotropic Gaussian of
+variance $\cs^{2}$ per component.
+
+\begin{lemma}[Gaussian central moments]
+\label{lem:gauss}
+With the conventions above,
+\begin{align}
+\langle 1\rangle &= \rho, &
+\langle C_\alpha\rangle &= 0, &
+\langle C_\alpha C_\beta\rangle &= \rho \cs^{2}\delta_{\alpha\beta},
+\label{eq:gauss012}\\
+\langle C_\alpha C_\beta C_\gamma\rangle &= 0, &
+\langle C_\alpha C_\beta C_\gamma C_\delta\rangle
+&= \rho \cs^{4}\,\Deltafour, & &
+\label{eq:gauss34}
+\end{align}
+with $\Deltafour=\delta_{\alpha\beta}\delta_{\gamma\delta}
++\delta_{\alpha\gamma}\delta_{\beta\delta}
++\delta_{\alpha\delta}\delta_{\beta\gamma}$; all odd-order central moments
+vanish.
+\end{lemma}
+
+\begin{proof}
+The Gaussian factorises over components, so a multi-index central moment
+equals $\rho\prod_{\mu}I_{n_\mu}$, where $n_\mu$ is the number of repetitions
+of direction $\mu$ and $I_{n}=\int x^{n}(2\pi\cs^{2})^{-1/2}
+e^{-x^{2}/2\cs^{2}}\dd x$ with $I_0=1$, $I_1=0$, $I_2=\cs^{2}$, $I_3=0$,
+$I_4=3\cs^{4}$. Any factor with odd $n_\mu$ annihilates the product, giving
+the stated odd-order vanishing and \eqref{eq:gauss012}. For the fourth-order
+moment the surviving index patterns are the three pairings, each contributing
+$I_2 I_2=\cs^{4}$, which is the Isserlis/Wick result $\rho\cs^{4}\Deltafour$.
+\end{proof}
+
+\subsection{Discrete framework}
+
+The standard LB equilibrium is the second-order Hermite truncation of
+\eqref{eq:maxwell} evaluated on the lattice
+\citep{Qian1992,HeLuo1997,ShanYuanChen2006},
+\begin{equation}
+f_i^{\eq}
+= w_i\,\rho\left[
+1
++\frac{c_{i\mu}u_\mu}{\cs^{2}}
++\frac{u_\mu u_\nu\big(c_{i\mu}c_{i\nu}-\cs^{2}\delta_{\mu\nu}\big)}{2\cs^{4}}
+\right].
+\label{eq:feq2}
+\end{equation}
+Standard isothermal velocity sets (D2Q9, D3Q15, D3Q19, D3Q27) are
+Gauss--Hermite quadratures exact to polynomial degree five
+\citep{HeLuo1997,ShanYuanChen2006}, so the weights satisfy the moment
+identities
+\begin{subequations}
+\label{eq:lattice}
+\begin{align}
+\sumi w_i &= 1, &
+\sumi w_i c_{i\alpha} &= 0,
+\label{eq:M01}\\
+\sumi w_i c_{i\alpha}c_{i\beta} &= \cs^{2}\delta_{\alpha\beta},  &
+\sumi w_i c_{i\alpha}c_{i\beta}c_{i\gamma} &= 0,
+\label{eq:M23}\\
+\sumi w_i c_{i\alpha}c_{i\beta}c_{i\gamma}c_{i\delta}
+&= \cs^{4}\,\Deltafour, &
+\sumi w_i c_{i\alpha}c_{i\beta}c_{i\gamma}c_{i\delta}c_{i\epsilon} &= 0.
+\label{eq:M45}
+\end{align}
+\end{subequations}
+Equations \eqref{eq:M01}--\eqref{eq:M45} are labelled $M_0,\dots,M_5$ below.
+The macroscopic moments are $\sum_i f_i^{\eq}=\rho$ and
+$\sum_i f_i^{\eq}c_{i\alpha}=\rho u_\alpha$ by construction.
+
+The third moment of the third-order equilibrium treated in
+Section~\ref{sec:third-order-eq} requires one further identity, the sixth-order
+weight moment, which is the \emph{first} member of the hierarchy that departs
+from full isotropy. For the tensor-product lattices it reads
+\begin{equation}
+M^{(6)}_{\alpha\beta\gamma\delta\epsilon\zeta}
+\equiv\sumi w_i\,c_{i\alpha}c_{i\beta}c_{i\gamma}c_{i\delta}c_{i\epsilon}c_{i\zeta}
+=\cs^{6}\,\Delta^{(6)}_{\alpha\beta\gamma\delta\epsilon\zeta}
++A\,\delta^{[6]}_{\alpha\beta\gamma\delta\epsilon\zeta},
+\label{eq:M6}
+\end{equation}
+where $\Delta^{(6)}$ is the fully symmetric sum of the $5!!=15$ pairings of six
+indices into three Kronecker deltas, the diagonal indicator
+$\delta^{[6]}_{\alpha\beta\gamma\delta\epsilon\zeta}$ equals unity iff all six
+indices coincide and zero otherwise, and the anisotropic defect amplitude is
+$A=m_6-15\cs^{6}$ with $m_6=\sumi w_i c_{ix}^{6}$ the one-dimensional sixth
+moment. On D3Q27 the cubic identity $c_{ix}^{6}=c_{ix}^{2}$ gives
+$m_6=\cs^{2}=\tfrac13$, against the isotropic value $15\cs^{6}=\tfrac59$, so
+$A=-\tfrac29$. The fourth-order moment, by contrast, is fully isotropic
+($m_4=3\cs^{4}$, consistent with \eqref{eq:M45}); thus $M_6$ is the lowest even
+moment to break isotropy, and the breakage is confined to the fully diagonal
+entries $M^{(6)}_{xxxxxx}=m_6$.
+
+\section{The second-order moment}
+\label{sec:second}
+
+\begin{proposition}[Continuous second moment]
+\label{prop:cont2}
+$\displaystyle \int f^{\eq}\xi_\alpha\xi_\beta\dd^{D}\xi
+=\rho u_\alpha u_\beta+\rho\cs^{2}\delta_{\alpha\beta}.$
+\end{proposition}
+
+\begin{proof}
+Writing $\xi_\alpha=u_\alpha+C_\alpha$ and using Lemma~\ref{lem:gauss},
+\begin{equation*}
+\langle\xi_\alpha\xi_\beta\rangle
+=u_\alpha u_\beta\langle 1\rangle
++u_\alpha\langle C_\beta\rangle
++u_\beta\langle C_\alpha\rangle
++\langle C_\alpha C_\beta\rangle
+=\rho u_\alpha u_\beta+\rho \cs^{2}\delta_{\alpha\beta}. \qedhere
+\end{equation*}
+\end{proof}
+
+\begin{proposition}[Discrete second moment]
+\label{prop:disc2}
+$\displaystyle \sum_i f_i^{\eq}c_{i\alpha}c_{i\beta}
+=\rho\cs^{2}\delta_{\alpha\beta}+\rho u_\alpha u_\beta.$
+\end{proposition}
+
+\begin{proof}
+Insert \eqref{eq:feq2} and split into the three terms of the bracket.
+\emph{Constant term:} by $M_2$,
+$\rho\sum_i w_i c_{i\alpha}c_{i\beta}=\rho\cs^{2}\delta_{\alpha\beta}$.
+\emph{Linear term:} by $M_3$,
+$(\rho u_\mu/\cs^{2})\sum_i w_i c_{i\mu}c_{i\alpha}c_{i\beta}=0$.
+\emph{Quadratic term:} by $M_4$ and $M_2$,
+\begin{align*}
+\frac{\rho u_\mu u_\nu}{2\cs^{4}}
+\Big[\sumi w_i c_{i\mu}c_{i\nu}c_{i\alpha}c_{i\beta}
+-\cs^{2}\delta_{\mu\nu}\sumi w_i c_{i\alpha}c_{i\beta}\Big]
+&=\frac{\rho u_\mu u_\nu}{2}
+\big[\delta_{\mu\nu}\delta_{\alpha\beta}
++\delta_{\mu\alpha}\delta_{\nu\beta}
++\delta_{\mu\beta}\delta_{\nu\alpha}
+-\delta_{\mu\nu}\delta_{\alpha\beta}\big]\\
+&=\tfrac{\rho}{2}\big(u_\alpha u_\beta+u_\beta u_\alpha\big)
+=\rho u_\alpha u_\beta.
+\end{align*}
+Summation gives the stated result.
+\end{proof}
+
+\begin{remark}
+Propositions~\ref{prop:cont2} and \ref{prop:disc2} coincide: the second-order
+moment, i.e.\ the momentum-flux tensor
+$\Pi_{\alpha\beta}=\rho u_\alpha u_\beta+p\,\delta_{\alpha\beta}$ with
+$p=\rho\cs^{2}$, is reproduced \emph{exactly} by the second-order discrete
+equilibrium. This exactness is what allows standard LB to recover the viscous
+stress correctly at leading order \citep{Kruger2017}.
+\end{remark}
+
+\section{The third-order moment}
+\label{sec:third}
+
+\begin{proposition}[Continuous third moment]
+\label{prop:cont3}
+\begin{equation}
+\int f^{\eq}\xi_\alpha\xi_\beta\xi_\gamma\dd^{D}\xi
+=\rho\cs^{2}\big(u_\alpha\delta_{\beta\gamma}
++u_\beta\delta_{\alpha\gamma}
++u_\gamma\delta_{\alpha\beta}\big)
++\rho\,u_\alpha u_\beta u_\gamma.
+\label{eq:cont3}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Expand $\xi_\alpha\xi_\beta\xi_\gamma
+=(u_\alpha+C_\alpha)(u_\beta+C_\beta)(u_\gamma+C_\gamma)$ and average term by
+term with Lemma~\ref{lem:gauss}. The triple-mean term yields
+$\rho\,u_\alpha u_\beta u_\gamma$ (it survives because $\langle1\rangle=\rho$);
+the three terms linear in $\mathbf{C}$ vanish through $\langle C\rangle=0$; the
+three terms with two peculiar factors give
+$u_\alpha\langle C_\beta C_\gamma\rangle+\text{(perm.)}
+=\rho\cs^{2}(u_\alpha\delta_{\beta\gamma}+u_\beta\delta_{\alpha\gamma}
++u_\gamma\delta_{\alpha\beta})$; and the triple-peculiar term vanishes as an
+odd Gaussian moment.
+\end{proof}
+
+\begin{proposition}[Discrete third moment]
+\label{prop:disc3}
+\begin{equation}
+\sum_i f_i^{\eq}c_{i\alpha}c_{i\beta}c_{i\gamma}
+=\rho\cs^{2}\big(u_\alpha\delta_{\beta\gamma}
++u_\beta\delta_{\alpha\gamma}
++u_\gamma\delta_{\alpha\beta}\big).
+\label{eq:disc3}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Insert \eqref{eq:feq2}. \emph{Constant term:} by $M_3$,
+$\rho\sum_i w_i c_{i\alpha}c_{i\beta}c_{i\gamma}=0$.
+\emph{Linear term:} by $M_4$,
+\begin{equation*}
+\frac{\rho u_\mu}{\cs^{2}}\sumi w_i
+c_{i\mu}c_{i\alpha}c_{i\beta}c_{i\gamma}
+=\frac{\rho u_\mu}{\cs^{2}}\cs^{4}
+\big(\delta_{\mu\alpha}\delta_{\beta\gamma}
++\delta_{\mu\beta}\delta_{\alpha\gamma}
++\delta_{\mu\gamma}\delta_{\alpha\beta}\big)
+=\rho\cs^{2}\big(u_\alpha\delta_{\beta\gamma}
++u_\beta\delta_{\alpha\gamma}+u_\gamma\delta_{\alpha\beta}\big).
+\end{equation*}
+\emph{Quadratic term:} the leading contraction is the fifth-order lattice
+moment, which vanishes by $M_5$, and the subtracted piece vanishes by $M_3$;
+hence the quadratic term contributes zero. Summation gives \eqref{eq:disc3}.
+\end{proof}
+
+\begin{remark}[The cubic discrepancy]
+\label{rem:cubic}
+Subtracting \eqref{eq:disc3} from \eqref{eq:cont3},
+\begin{equation}
+\underbrace{\int f^{\eq}\xi_\alpha\xi_\beta\xi_\gamma\dd^{D}\xi}_{\text{continuous}}
+-\underbrace{\sum_i f_i^{\eq}c_{i\alpha}c_{i\beta}c_{i\gamma}}_{\text{discrete }O(u^{2})}
+=\rho\,u_\alpha u_\beta u_\gamma .
+\label{eq:gap}
+\end{equation}
+The structural reason for the omission is a parity argument visible in the
+two proofs. In the second moment (Proposition~\ref{prop:disc2}) the highest
+lattice moment reached by the quadratic part of the equilibrium is the
+\emph{even} $M_4$, which is non-zero and supplies $\rho u_\alpha u_\beta$. In
+the third moment the corresponding contraction reaches the \emph{odd} $M_5$,
+which vanishes; the cubic term therefore has no source in a second-order
+equilibrium. This missing contribution is the well-known nonlinear
+($O(\mathrm{Ma}^{3})$) deviation of the lattice BGK models from the
+Navier--Stokes stress \citep{QianOrszag1993,Kruger2017}.
+\end{remark}
+
+\section{The third-order equilibrium and its discrete third moment}
+\label{sec:third-order-eq}
+
+Remark~\ref{rem:cubic} located the cubic discrepancy in the truncation of the
+equilibrium at second order. The natural remedy is to retain the next term of
+the Hermite expansion of \eqref{eq:maxwell}. We write this third-order
+equilibrium explicitly, then recompute the discrete third moment using the
+sixth-order identity \eqref{eq:M6}. The cubic term is recovered for every mixed
+index triple but not for the fully diagonal ones; the latter failure is shown,
+in Section~\ref{sec:d3q27}, to be a property of the velocity set independent of
+the equilibrium.
+
+\subsection{The third-order Hermite equilibrium}
+\label{sec:feq3}
+
+The expansion of the Maxwellian \eqref{eq:maxwell} retained to third Hermite
+order is \citep{Grad1949,HeLuo1997,ShanYuanChen2006}
+\begin{equation}
+f_i^{\eq,(3)}
+= w_i\rho\left[
+1
++\frac{c_{i\mu}u_\mu}{\cs^{2}}
++\frac{u_\mu u_\nu\,\mathcal{H}^{(2)}_{i,\mu\nu}}{2\cs^{4}}
++\frac{u_\mu u_\nu u_\lambda\,\mathcal{H}^{(3)}_{i,\mu\nu\lambda}}{6\cs^{6}}
+\right],
+\label{eq:feq3}
+\end{equation}
+with the second- and third-order tensor Hermite polynomials
+\begin{align}
+\mathcal{H}^{(2)}_{i,\mu\nu}&=c_{i\mu}c_{i\nu}-\cs^{2}\delta_{\mu\nu},
+\label{eq:H2}\\
+\mathcal{H}^{(3)}_{i,\mu\nu\lambda}&=c_{i\mu}c_{i\nu}c_{i\lambda}
+-\cs^{2}\big(c_{i\mu}\delta_{\nu\lambda}+c_{i\nu}\delta_{\mu\lambda}
++c_{i\lambda}\delta_{\mu\nu}\big).
+\label{eq:H3}
+\end{align}
+By index class, the ten independent components of \eqref{eq:H3} in three
+dimensions are
+\begin{equation}
+\underbrace{\mathcal{H}^{(3)}_{xxx}=c_x^{3}-3\cs^{2}c_x}_{\text{diagonal}},
+\qquad
+\underbrace{\mathcal{H}^{(3)}_{xxy}=(c_x^{2}-\cs^{2})\,c_y}_{\text{two equal}},
+\qquad
+\underbrace{\mathcal{H}^{(3)}_{xyz}=c_xc_yc_z}_{\text{all distinct}},
+\label{eq:H3components}
+\end{equation}
+together with their index permutations (three diagonal, six two-equal, one
+all-distinct).
+
+\begin{remark}[Vanishing of the diagonal Hermite mode on D3Q27]
+\label{rem:H3vanish}
+On D3Q27 the cubic identity $c_{ix}^{3}=c_{ix}$ together with $3\cs^{2}=1$ give
+\begin{equation}
+\mathcal{H}^{(3)}_{i,xxx}\big|_{\text{D3Q27}}
+=c_{ix}^{3}-3\cs^{2}c_{ix}=c_{ix}-c_{ix}=0
+\label{eq:H3xxxzero}
+\end{equation}
+identically over the lattice. The third-order Hermite subspace represented by
+D3Q27 thus contains only the seven mixed modes; the three diagonal modes are the
+zero vector. No equilibrium can populate a basis direction absent from the
+lattice.
+\end{remark}
+
+\subsection{Discrete third moment of the third-order equilibrium}
+\label{sec:disc3-order3}
+
+\begin{proposition}[Discrete third moment under $f_i^{\eq,(3)}$]
+\label{prop:disc3order3}
+On D3Q27, the third moment of the third-order equilibrium \eqref{eq:feq3} is
+\begin{equation}
+\sum_i f_i^{\eq,(3)}c_{i\alpha}c_{i\beta}c_{i\gamma}
+=\rho\cs^{2}\big(u_\alpha\delta_{\beta\gamma}+u_\beta\delta_{\alpha\gamma}
++u_\gamma\delta_{\alpha\beta}\big)
++\rho\,u_\alpha u_\beta u_\gamma\,\big(1-\delta^{[3]}_{\alpha\beta\gamma}\big),
+\label{eq:disc3order3}
+\end{equation}
+where $\delta^{[3]}_{\alpha\beta\gamma}=1$ if $\alpha=\beta=\gamma$ and zero
+otherwise. The cubic term is recovered exactly for every mixed index triple and
+is absent for the fully diagonal components.
+\end{proposition}
+
+\begin{proof}
+Write $\Pi_{\alpha\beta\gamma}=\Pi^{(2)}_{\alpha\beta\gamma}
++\Delta\Pi_{\alpha\beta\gamma}$, where $\Pi^{(2)}$ collects the first three terms
+of \eqref{eq:feq3} and equals
+$\rho\cs^{2}(u_\alpha\delta_{\beta\gamma}+u_\beta\delta_{\alpha\gamma}
++u_\gamma\delta_{\alpha\beta})$ by Proposition~\ref{prop:disc3}, and the
+third-order term contributes
+\begin{equation*}
+\Delta\Pi_{\alpha\beta\gamma}
+=\frac{\rho}{6\cs^{6}}\,u_\mu u_\nu u_\lambda\,
+\Theta_{\mu\nu\lambda,\alpha\beta\gamma},
+\qquad
+\Theta_{\mu\nu\lambda,\alpha\beta\gamma}
+=\sumi w_i\,\mathcal{H}^{(3)}_{i,\mu\nu\lambda}\,
+c_{i\alpha}c_{i\beta}c_{i\gamma}.
+\end{equation*}
+The inverse Hermite relation $c_{i\alpha}c_{i\beta}c_{i\gamma}
+=\mathcal{H}^{(3)}_{i,\alpha\beta\gamma}
++\cs^{2}(\delta_{\alpha\beta}c_{i\gamma}+\delta_{\alpha\gamma}c_{i\beta}
++\delta_{\beta\gamma}c_{i\alpha})$ splits $\Theta$ into a product of two
+third-order Hermite polynomials plus cross terms
+$\sumi w_i\,\mathcal{H}^{(3)}_{i,\mu\nu\lambda}c_{i\gamma}$. The cross terms are
+degree-four polynomials, integrated exactly by the fifth-degree quadrature, and
+therefore equal their continuum value
+$\langle\mathcal{H}^{(3)}\mathcal{H}^{(1)}\rangle=0$ by Hermite orthogonality.
+Hence
+\begin{equation*}
+\Theta_{\mu\nu\lambda,\alpha\beta\gamma}
+=\sumi w_i\,\mathcal{H}^{(3)}_{i,\mu\nu\lambda}
+\mathcal{H}^{(3)}_{i,\alpha\beta\gamma}.
+\end{equation*}
+This degree-six sum equals its continuum value
+$\cs^{6}P_{\mu\nu\lambda,\alpha\beta\gamma}$, with
+$P=\sum_{\sigma\in S_3}\delta_{\mu\sigma_1}\delta_{\nu\sigma_2}
+\delta_{\lambda\sigma_3}$ the symmetric pairing of $(\mu\nu\lambda)$ with
+$(\alpha\beta\gamma)$, provided no monomial $c_{ix}^{6}$ arises --- the only
+entry of \eqref{eq:M6} that carries the defect $A$. Such a monomial requires
+both factors to supply $c_{ix}^{3}$, that is $\mu=\nu=\lambda=x$ \emph{and}
+$\alpha=\beta=\gamma=x$.
+
+\emph{Mixed indices} ($\alpha,\beta,\gamma$ not all equal):
+$\mathcal{H}^{(3)}_{\alpha\beta\gamma}$ carries no $c_{ix}^{3}$ term, so no
+$c_{ix}^{6}$ arises for any $(\mu\nu\lambda)$ and the sum is exact. Contracting
+with $u_\mu u_\nu u_\lambda$, each permutation in $P$ contributes
+$u_\alpha u_\beta u_\gamma$, so
+$u_\mu u_\nu u_\lambda\Theta=6\cs^{6}\,u_\alpha u_\beta u_\gamma$ and
+$\Delta\Pi_{\alpha\beta\gamma}=\rho\,u_\alpha u_\beta u_\gamma$.
+
+\emph{Diagonal indices} ($\alpha=\beta=\gamma=x$): by
+Remark~\ref{rem:H3vanish}, $\mathcal{H}^{(3)}_{i,xxx}\equiv0$ over D3Q27, so the
+correction associated with this mode in \eqref{eq:feq3} is identically zero and
+contributes nothing, giving $\Delta\Pi_{xxx}=0$.
+Section~\ref{sec:d3q27} reaches the same conclusion through the quadrature defect
+$A$ of \eqref{eq:M6} and through an equilibrium-independent identity. Collecting
+both cases yields \eqref{eq:disc3order3}.
+\end{proof}
+
+A concrete check of the mixed case is instructive. For $\Pi_{xyz}$ with
+$x,y,z$ distinct, the second-order part vanishes; on the tensor-product lattice
+the only non-vanishing internal indices are the permutations of $(x,y,z)$, each
+yielding $\sumi w_i c_{ix}^{2}c_{iy}^{2}c_{iz}^{2}=m_2^{3}=\cs^{6}$. Summing the
+six permutations,
+$\Delta\Pi_{xyz}=(\rho/6\cs^{6})\cdot 6\cs^{6}\,u_xu_yu_z=\rho\,u_xu_yu_z$, in
+agreement with the continuum value \eqref{eq:cont3}.
+
+\section{Component-wise reality on the D3Q27 lattice}
+\label{sec:d3q27}
+
+Proposition~\ref{prop:disc3order3} established the recovery pattern by direct
+computation with the third-order equilibrium. We now give an
+equilibrium-independent argument that reaches the same conclusion for the
+diagonal components, exposing it as a property of the velocity set alone, and
+collect the result in a single table. Throughout this section we use the D3Q27
+lattice in lattice units, $c_{i\alpha}\in\{-1,0,1\}$, $\cs^{2}=1/3$.
+
+\subsection{The diagonal lock}
+
+\begin{proposition}[Diagonal cubic lock]
+\label{prop:lock}
+On any lattice with $c_{i\alpha}\in\{-1,0,1\}$ (D2Q9, D3Q15, D3Q19, D3Q27),
+\begin{equation}
+\Pi_{\alpha\alpha\alpha}\equiv\sum_i f_i\,c_{i\alpha}^{3}=\rho u_\alpha
+\qquad\text{for every }f_i,
+\label{eq:lock}
+\end{equation}
+in particular independently of the choice or Hermite order of the
+equilibrium.
+\end{proposition}
+
+\begin{proof}
+Since $c_{i\alpha}\in\{-1,0,1\}$, the cubic identity $c_{i\alpha}^{3}
+=c_{i\alpha}$ holds pointwise. Hence
+$\sum_i f_i c_{i\alpha}^{3}=\sum_i f_i c_{i\alpha}=\rho u_\alpha$ for any
+distribution.
+\end{proof}
+
+Because the continuous target \eqref{eq:cont3} requires
+$\Pi_{\alpha\alpha\alpha}=3\rho\cs^{2}u_\alpha+\rho u_\alpha^{3}
+=\rho u_\alpha+\rho u_\alpha^{3}$ (using $3\cs^{2}=1$), the diagonal cubic
+term $\rho u_\alpha^{3}$ has no degree of freedom on a three-speed lattice and
+cannot be represented.
+
+\subsection{The sixth-order moment defect}
+
+The same obstruction appears, equivalently, as a quadrature defect.
+Augmenting \eqref{eq:feq2} with the third-order Hermite term and evaluating
+its contribution to the diagonal moment $\Pi_{xxx}$ reduces, on the
+one-dimensional factor D1Q3, to
+\begin{equation}
+\frac{u_x^{3}}{6\cs^{6}}\big(M_6-3\cs^{2}M_4\big),
+\qquad
+M_6=\sumi w_i c_{ix}^{6},\quad M_4=\sumi w_i c_{ix}^{4}.
+\label{eq:sixth}
+\end{equation}
+For D1Q3 one has $M_4=\tfrac13$ (which equals $3\cs^{4}$, so the
+fourth-order identity in \eqref{eq:M45} holds), whereas
+$M_6=\tfrac13\neq 15\cs^{6}=\tfrac59$. Substituting,
+$M_6-3\cs^{2}M_4=\tfrac13-3\cdot\tfrac13\cdot\tfrac13=0$, so the third-order
+Hermite term contributes \emph{exactly zero} to the diagonal moment: the
+lattice sixth-order defect cancels the very term it was introduced to
+supply. This is the quadrature-level statement of Proposition~\ref{prop:lock},
+and is consistent with the lattice's fifth-degree quadrature accuracy
+\citep{ShanYuanChen2006}.
+
+\subsection{Recoverable mixed components}
+
+For a component in which no single direction carries a power exceeding four,
+the relevant lattice moment is a tensor product of one-dimensional factors,
+each exact, so the third-order Hermite term \emph{does} restore the cubic
+contribution. For example $\sum_i w_i c_{ix}^{2}c_{iy}^{2}c_{iz}^{2}
+=\cs^{6}$ matches the continuum, and the mixed moments are recovered:
+\begin{align}
+\Pi_{xyz}^{\text{cont}}&=\rho\,u_x u_y u_z, &
+\Pi_{xxy}^{\text{cont}}&=\rho\cs^{2}u_y+\rho\,u_x^{2}u_y ,
+\label{eq:mixed}
+\end{align}
+both attainable with the third-order Hermite equilibrium. Only the fully
+diagonal components remain locked. Table~\ref{tab:summary} collects the three
+representative cases.
+
+\begin{table}[t]
+\centering
+\caption{Third-order equilibrium moment on D3Q27 ($\cs^{2}=1/3$, $3\cs^{2}=1$),
+per unit $\rho$, for the three index classes. The second-order column is
+Proposition~\ref{prop:disc3}; the Hermite-3 column is the best attainable on a
+three-speed lattice; the Maxwell column is the continuum target
+\eqref{eq:cont3}.}
+\label{tab:summary}
+\begin{tabular}{lccc}
+\toprule
+Component & Continuous Maxwell & Discrete $O(u^{2})$ & Discrete $+$ Hermite-3 \\
+\midrule
+$\Pi_{xxx}$ (diagonal) & $u_x+u_x^{3}$ & $u_x$ & $u_x$ \;(locked) \\
+$\Pi_{xxy}$ (two equal) & $\tfrac13 u_y+u_x^{2}u_y$ & $\tfrac13 u_y$ &
+$\tfrac13 u_y+u_x^{2}u_y$ \\
+$\Pi_{xyz}$ (all distinct) & $u_x u_y u_z$ & $0$ & $u_x u_y u_z$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Consequences and concluding remarks}
+\label{sec:concl}
+
+The three rows of Table~\ref{tab:summary} establish a strict ordering of
+representable third moments,
+\begin{equation}
+\underbrace{\rho\cs^{2}(\cdots)}_{O(u^{2})\text{ truncation}}
+\ \subsetneq\
+\underbrace{\rho\cs^{2}(\cdots)+\rho\,u_\alpha u_\beta u_\gamma\big|_{\text{mixed only}}}_{\text{Hermite-3 on D3Q27}}
+\ \subsetneq\
+\underbrace{\rho\cs^{2}(\cdots)+\rho\,u_\alpha u_\beta u_\gamma\big|_{\text{all}}}_{\text{continuous Maxwell}} .
+\label{eq:hierarchy}
+\end{equation}
+The gap between the second and third members is the diagonal cubic term, which
+the three-speed lattice cannot carry. This is precisely the lattice-induced
+$O(\mathrm{Ma}^{3})$ violation of Galilean invariance of the standard scheme
+\citep{QianOrszag1993,ChikatamarlaKarlin2006}; its complete removal requires
+multi-speed (higher-quadrature) velocity sets such as those constructed from
+fifth-degree Gauss--Hermite rules \citep{ChikatamarlaKarlin2009}.
+
+It is instructive to see why the cumulant collision operator
+\citep{Geier2015} sidesteps the issue rather than attempting to restore the
+diagonal raw moment, which Proposition~\ref{prop:lock} shows to be
+impossible. The two-sided Laplace transform of \eqref{eq:maxwell} is
+$M(\mathbf{k})/\rho=\exp\!\big(k_\mu u_\mu+\tfrac12\cs^{2}k_\mu k_\mu\big)$,
+so the cumulant generating function $\ln(M/\rho)$ is a second-degree
+polynomial: the Maxwellian possesses only a first cumulant
+$\kappa_{1,\alpha}=u_\alpha$ and a second cumulant
+$\kappa_{2,\alpha\beta}=\cs^{2}\delta_{\alpha\beta}$, with all higher
+cumulants identically zero \citep{Geier2015}. Through the moment--cumulant
+relation the cubic term in \eqref{eq:cont3} is the reducible contribution
+$\kappa_{1,\alpha}\kappa_{1,\beta}\kappa_{1,\gamma}
+=\rho\,u_\alpha u_\beta u_\gamma$, which is frame-dependent rather than a
+genuine third-order cumulant. The cumulant operator relaxes the
+Galilean-invariant cumulants directly, setting the third-order cumulant to
+its (vanishing) equilibrium value; it therefore neither requires nor
+falsely advertises recovery of the diagonal raw moment, which accounts for
+its improved Galilean behaviour at high Reynolds number relative to a
+Hermite-extended BGK equilibrium on the same D3Q27 lattice.
+
+In summary, the apparently conflicting third-order results in the literature
+are two correct statements about two different objects: the continuum
+Maxwellian carries $\rho\,u_\alpha u_\beta u_\gamma$
+(Proposition~\ref{prop:cont3}), the second-order discrete equilibrium does
+not (Proposition~\ref{prop:disc3}), and on the D3Q27 lattice the diagonal
+portion of that term is structurally unrepresentable
+(Proposition~\ref{prop:lock}). The second-order moment, by contrast, is exact
+in both frameworks (Propositions~\ref{prop:cont2}--\ref{prop:disc2}), which is
+why standard LB recovers the Navier--Stokes stress at the intended order.
+
+\begin{thebibliography}{99}
+
+\bibitem[Bhatnagar et al.(1954)]{BGK1954}
+P.~L. Bhatnagar, E.~P. Gross, M.~Krook,
+A model for collision processes in gases. I. Small amplitude processes in
+charged and neutral one-component systems,
+Phys. Rev. 94 (1954) 511--525.
+\href{https://doi.org/10.1103/PhysRev.94.511}{doi:10.1103/PhysRev.94.511}.
+
+\bibitem[Chikatamarla and Karlin(2006)]{ChikatamarlaKarlin2006}
+S.~S. Chikatamarla, I.~V. Karlin,
+Entropy and Galilean invariance of lattice Boltzmann theories,
+Phys. Rev. Lett. 97 (19) (2006) 190601.
+\href{https://doi.org/10.1103/PhysRevLett.97.190601}{doi:10.1103/PhysRevLett.97.190601}.
+
+\bibitem[Chikatamarla and Karlin(2009)]{ChikatamarlaKarlin2009}
+S.~S. Chikatamarla, I.~V. Karlin,
+Lattices for the lattice Boltzmann method,
+Phys. Rev. E 79 (4) (2009) 046701.
+\href{https://doi.org/10.1103/PhysRevE.79.046701}{doi:10.1103/PhysRevE.79.046701}.
+
+\bibitem[Geier et al.(2015)]{Geier2015}
+M.~Geier, M.~Sch\"onherr, A.~Pasquali, M.~Krafczyk,
+The cumulant lattice Boltzmann equation in three dimensions: Theory and
+validation,
+Comput. Math. Appl. 70 (4) (2015) 507--547.
+\href{https://doi.org/10.1016/j.camwa.2015.05.001}{doi:10.1016/j.camwa.2015.05.001}.
+
+\bibitem[Grad(1949)]{Grad1949}
+H.~Grad,
+On the kinetic theory of rarefied gases,
+Commun. Pure Appl. Math. 2 (4) (1949) 331--407.
+\href{https://doi.org/10.1002/cpa.3160020403}{doi:10.1002/cpa.3160020403}.
+
+\bibitem[He and Luo(1997)]{HeLuo1997}
+X.~He, L.-S. Luo,
+Theory of the lattice Boltzmann method: From the Boltzmann equation to the
+lattice Boltzmann equation,
+Phys. Rev. E 56 (6) (1997) 6811--6817.
+\href{https://doi.org/10.1103/PhysRevE.56.6811}{doi:10.1103/PhysRevE.56.6811}.
+
+\bibitem[Kr\"uger et al.(2017)]{Kruger2017}
+T.~Kr\"uger, H.~Kusumaatmaja, A.~Kuzmin, O.~Shardt, G.~Silva, E.~M. Viggen,
+The Lattice Boltzmann Method: Principles and Practice,
+Graduate Texts in Physics, Springer, Cham, 2017.
+\href{https://doi.org/10.1007/978-3-319-44649-3}{doi:10.1007/978-3-319-44649-3}.
+
+\bibitem[Qian and Orszag(1993)]{QianOrszag1993}
+Y.-H. Qian, S.~A. Orszag,
+Lattice BGK models for the Navier--Stokes equation: Nonlinear deviation in
+compressible regimes,
+Europhys. Lett. 21 (3) (1993) 255--259.
+\href{https://doi.org/10.1209/0295-5075/21/3/001}{doi:10.1209/0295-5075/21/3/001}.
+
+\bibitem[Qian et al.(1992)]{Qian1992}
+Y.-H. Qian, D.~d'Humi\`eres, P.~Lallemand,
+Lattice BGK models for Navier--Stokes equation,
+Europhys. Lett. 17 (6) (1992) 479--484.
+\href{https://doi.org/10.1209/0295-5075/17/6/001}{doi:10.1209/0295-5075/17/6/001}.
+
+\bibitem[Shan et al.(2006)]{ShanYuanChen2006}
+X.~Shan, X.-F. Yuan, H.~Chen,
+Kinetic theory representation of hydrodynamics: a way beyond the
+Navier--Stokes equation,
+J. Fluid Mech. 550 (2006) 413--441.
+\href{https://doi.org/10.1017/S0022112005008153}{doi:10.1017/S0022112005008153}.
+
+\end{thebibliography}
+
+\end{document}
