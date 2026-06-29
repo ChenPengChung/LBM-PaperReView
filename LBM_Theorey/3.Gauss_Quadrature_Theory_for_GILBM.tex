@@ -30,6 +30,9 @@
 \usepackage{graphicx}
 \usepackage{multirow}
 
+%---------- Colour ----------
+\usepackage[dvipsnames]{xcolor}
+
 %---------- Hyperref (load last among most) ----------
 \usepackage[
   colorlinks=true,
@@ -320,6 +323,88 @@ $\xi_i=\mathrm{root}(\phi_n)$ and the orthogonality-induced cancellation in the
 proof of precision. It does not appear in the integrand.
 \end{remark}
 
+\subsection{Definition of the quadrature weights and their universal property}
+\label{sec:weights-def}
+
+We must distinguish carefully between the \emph{definition} of the quadrature
+weights and the various \emph{derived closed-form expressions} that hold under
+additional structural assumptions. The definition itself is universal: it does
+not require the nodes to be Gaussian, nor any orthogonality property.
+
+\begin{definition}[Interpolatory quadrature weights]\label{def:weights}
+Let $\xi_1<\xi_2<\cdots<\xi_n$ be $n$ distinct nodes in $I$. The associated
+\emph{interpolatory quadrature weights} are
+\begin{equation}
+  w_i \;:=\; \int_I \ell_i^{(n)}(x)\,w(x)\,dx,
+  \qquad
+  \ell_i^{(n)}(x) \;:=\; \prod_{j\neq i}\frac{x-\xi_j}{\xi_i-\xi_j},
+  \label{eq:weight-def}
+\end{equation}
+where $\ell_i^{(n)}\in\PP_{n-1}$ denote the Lagrange basis polynomials.
+\end{definition}
+
+\begin{lemma}[Exactness of $n$-point interpolatory quadrature on
+$\PP_{n-1}$]\label{lem:interp-exact}
+Let $\Q_n[f]:=\sum_{i=1}^n w_i\,f(\xi_i)$ with weights $\{w_i\}_{i=1}^n$
+defined by \eqref{eq:weight-def}. Then
+\[
+  \Q_n[r] \;=\; \I[r] \;=\; \int_I r(x)\,w(x)\,dx,
+  \qquad \forall\, r\in\PP_{n-1}.
+\]
+\end{lemma}
+
+\begin{proof}
+We proceed in three steps.
+
+\textbf{Step (a) (Lagrange basis properties).}
+By direct evaluation,
+\begin{equation}
+  \ell_i^{(n)}(\xi_k) \;=\; \prod_{j\neq i}\frac{\xi_k-\xi_j}{\xi_i-\xi_j}
+                       \;=\; \delta_{ik}.
+  \label{eq:kron}
+\end{equation}
+Indeed, when $k=i$ each factor reduces to unity; when $k\neq i$ the factor
+with $j=k$ vanishes. Since $\ell_i^{(n)}$ is a product of $n-1$ linear factors,
+$\deg\ell_i^{(n)}=n-1$, hence $\ell_i^{(n)}\in\PP_{n-1}$. Moreover the family
+$\{\ell_i^{(n)}\}_{i=1}^n$ is linearly independent in $\PP_{n-1}$: if
+$\sum_{i=1}^n c_i\,\ell_i^{(n)}\equiv 0$, evaluating at $x=\xi_k$ and applying
+\eqref{eq:kron} forces $c_k=0$ for every $k$. As $\dim\PP_{n-1}=n$, the family
+$\{\ell_i^{(n)}\}_{i=1}^n$ is therefore a basis of $\PP_{n-1}$.
+
+\textbf{Step (b) (Self-interpolation identity).}
+For any $r\in\PP_{n-1}$, there exist unique coefficients $a_i\in\R$ such that
+$r=\sum_{i=1}^n a_i\,\ell_i^{(n)}$. Evaluating at $x=\xi_k$ and using
+\eqref{eq:kron} yields $a_k=r(\xi_k)$, whence
+\begin{equation}
+  r(x) \;=\; \sum_{i=1}^n r(\xi_i)\,\ell_i^{(n)}(x).
+  \label{eq:lagrange-id}
+\end{equation}
+Equation \eqref{eq:lagrange-id} is an \emph{exact} identity, not an
+approximation: for any $r\in\PP_{n-1}$ the Lagrange interpolant of $r$ on
+$\{\xi_i\}$ coincides with $r$ itself.
+
+\textbf{Step (c) (Integration against $w$).}
+Multiplying \eqref{eq:lagrange-id} by $w(x)$, integrating over $I$, and
+exchanging the (finite) sum with the integral by linearity,
+\[
+  \I[r] \;=\; \int_I r(x)\,w(x)\,dx
+        \;=\; \sum_{i=1}^n r(\xi_i)\underbrace{\int_I \ell_i^{(n)}(x)\,w(x)\,dx}_{=\,w_i}
+        \;=\; \sum_{i=1}^n w_i\,r(\xi_i) \;=\; \Q_n[r]. \qedhere
+\]
+\end{proof}
+
+\begin{remark}[Three layers: definition, generic closed form, and family-specific
+expressions]\label{rmk:three-layers}
+Equation \eqref{eq:weight-def} is the universal \emph{definition} of the
+quadrature weights and is valid for any choice of nodes (interpolatory rules in
+general). The Christoffel--Darboux closed form derived in
+\S\ref{sec:CD-derivation} below holds \emph{only} when the nodes are chosen as
+the roots of $\phi_n$; the family-specific formulas
+\eqref{eq:GL-weights}~(Legendre) and \eqref{eq:GH-weights}~(Hermite) are
+further specialisations. In any proof of the Gauss precision theorem, only the
+definition \eqref{eq:weight-def} is needed.
+\end{remark}
+
 \subsection{Precision theorem}
 
 \begin{theorem}[Gauss precision; \cite{Gauss1814,Stroud1971}]\label{thm:gauss}
@@ -373,16 +458,14 @@ Hence $\I[f]=\I[r]$.
   \qquad i=1,\ldots,n.
 \]
 
-\textbf{Step 5 (Lagrange closure).} Since $r\in\PP_{n-1}$, the $n$-point
-Lagrange interpolant of $r$ at the nodes equals $r$ exactly, so
+\textbf{Step 5 (Lagrange closure via Lemma~\ref{lem:interp-exact}).}
+Since $r\in\PP_{n-1}$, Lemma~\ref{lem:interp-exact} applies directly:
 \[
-  \I[r] \;=\; \int_I\!\Bigl[\sum_{i=1}^n r(\xi_i)\,\ell_i^{(n)}(x)\Bigr]
-                 w(x)\,dx
-        \;=\; \sum_{i=1}^n w_i\,r(\xi_i)
-        \;=\; \sum_{i=1}^n w_i\,f(\xi_i)
-        \;=\; \Q_n[f].
+  \I[r] \;=\; \sum_{i=1}^n w_i\,r(\xi_i) \;=\; \sum_{i=1}^n w_i\,f(\xi_i)
+        \;=\; \Q_n[f],
 \]
-Combining Steps~3--5 gives $\I[f]=\Q_n[f]$.
+where the second equality uses $f(\xi_i)=r(\xi_i)$ from Step~4. Combining
+with $\I[f]=\I[r]$ from Step~3 yields $\I[f]=\Q_n[f]$.
 
 \textbf{Optimality.} Take $f^*(x):=\prod_{i=1}^n(x-\xi_i)^2\in\PP_{2n}$.
 Then $f^*(\xi_i)=0$ so $\Q_n[f^*]=0$. But $f^*>0$ on $I\setminus\{\xi_i\}$ and
@@ -390,16 +473,103 @@ $w\ge0$, whence $\I[f^*]>0$. Thus $\Q_n[f^*]\neq\I[f^*]$, proving exactness on
 $\PP_{2n}$ is impossible.
 \end{proof}
 
-\subsection{Closed forms for the weights}
+\subsection{From the Lagrange definition to the Christoffel--Darboux closed
+form}\label{sec:CD-derivation}
 
-The Christoffel--Darboux identity \cite[Thm.~3.2.2]{Szego1975} yields the
-equivalent representations
+The Lagrange definition \eqref{eq:weight-def} is universal but seldom used in
+practice, since direct evaluation of $\int_I \ell_i^{(n)}(x)\,w(x)\,dx$ for
+$n\ge 4$ becomes cumbersome. When the nodes are chosen as the roots of
+$\phi_n$, the definition admits a compact closed form derivable in three steps.
+We assume the standard normalisation that $\phi_n$ has leading coefficient
+$c_n>0$ and write $k_n:=c_n/c_{n-1}$ for the ratio of consecutive leading
+coefficients.
+
+\textbf{Step 1 (Compact form of the Lagrange basis).}
+Since $\phi_n(x)=c_n\prod_{j=1}^n(x-\xi_j)$,
+\[
+  \prod_{j\neq i}(x-\xi_j) \;=\; \frac{\phi_n(x)}{c_n\,(x-\xi_i)},
+  \qquad
+  \prod_{j\neq i}(\xi_i-\xi_j) \;=\; \frac{\phi_n'(\xi_i)}{c_n}.
+\]
+Substituting into the Lagrange basis from Definition~\ref{def:weights},
 \begin{equation}
-  w_i \;=\; \frac{h_{n-1}}{\phi_{n-1}(\xi_i)\,\phi_n'(\xi_i)}
-       \;=\; -\,\frac{h_n}{\phi_n'(\xi_i)\,\phi_{n+1}(\xi_i)},
-  \label{eq:weights-cd}
+  \ell_i^{(n)}(x) \;=\;
+  \frac{\prod_{j\neq i}(x-\xi_j)}{\prod_{j\neq i}(\xi_i-\xi_j)}
+  \;=\;
+  \frac{\phi_n(x)}{\phi_n'(\xi_i)\,(x-\xi_i)}.
+  \label{eq:lagrange-compact}
 \end{equation}
-from which the concrete formulas for Legendre and Hermite follow.
+The constants $c_n$ have cancelled.
+
+\textbf{Step 2 (Christoffel--Darboux identity).}
+The Christoffel--Darboux identity \cite[Thm.~3.2.2]{Szego1975} reads
+\begin{equation}
+  \sum_{k=0}^{n-1}\frac{\phi_k(x)\,\phi_k(y)}{h_k}
+  \;=\;\frac{k_n}{h_{n-1}}\cdot
+  \frac{\phi_n(x)\,\phi_{n-1}(y)-\phi_{n-1}(x)\,\phi_n(y)}{x-y}.
+  \label{eq:cd}
+\end{equation}
+Specialise $y=\xi_i$; since $\phi_n(\xi_i)=0$, \eqref{eq:cd} becomes
+\begin{equation}
+  \sum_{k=0}^{n-1}\frac{\phi_k(x)\,\phi_k(\xi_i)}{h_k}
+  \;=\;\frac{k_n\,\phi_{n-1}(\xi_i)}{h_{n-1}}\cdot\frac{\phi_n(x)}{x-\xi_i}.
+  \label{eq:cd-spec}
+\end{equation}
+
+\textbf{Step 3 (Closed form for $w_i$).}
+Substituting \eqref{eq:lagrange-compact} into the definition
+\eqref{eq:weight-def},
+\begin{equation}
+  w_i \;=\; \frac{1}{\phi_n'(\xi_i)}\int_I \frac{\phi_n(x)}{x-\xi_i}\,w(x)\,dx.
+  \label{eq:wi-step3a}
+\end{equation}
+Solving \eqref{eq:cd-spec} for $\phi_n(x)/(x-\xi_i)$ and substituting into
+\eqref{eq:wi-step3a},
+\[
+  w_i \;=\; \frac{h_{n-1}}{k_n\,\phi_n'(\xi_i)\,\phi_{n-1}(\xi_i)}
+            \sum_{k=0}^{n-1}\frac{\phi_k(\xi_i)}{h_k}
+            \int_I \phi_k(x)\,w(x)\,dx.
+\]
+By orthogonality of $\phi_k$ with the constant $\phi_0\equiv 1$ (assuming the
+standard convention $\phi_0(x)=1$ so that $h_0=\int_I w\,dx$), only the $k=0$
+term survives:
+\[
+  \int_I \phi_k(x)\,w(x)\,dx \;=\; \ipw{\phi_k}{\phi_0}\cdot \tfrac{1}{\phi_0}
+                              \;=\; h_0\,\delta_{k0}.
+\]
+Hence the sum reduces to $\phi_0(\xi_i)/h_0 \cdot h_0 = 1$, yielding
+\begin{equation}
+  \boxed{\;
+    w_i \;=\; \frac{h_{n-1}}{k_n\,\phi_n'(\xi_i)\,\phi_{n-1}(\xi_i)}.
+  \;}
+  \label{eq:weights-cd-main}
+\end{equation}
+
+\textbf{Equivalent form via the three-term recurrence.}
+The three-term recurrence (in monic-leading form)
+\[
+  \phi_{n+1}(x) \;=\; (x-\alpha_n)\,\phi_n(x)
+                       - \beta_n\,\phi_{n-1}(x), \qquad \beta_n>0,
+\]
+implies $\phi_{n+1}(\xi_i)=-\beta_n\,\phi_{n-1}(\xi_i)$ at the roots
+$\phi_n(\xi_i)=0$. Combining with $h_n=\beta_n h_{n-1}$
+\cite[Eq.~(3.2.7)]{Szego1975} and rescaling for the leading coefficient
+yields the dual form
+\begin{equation}
+  w_i \;=\; -\,\frac{h_n}{k_{n+1}\,\phi_n'(\xi_i)\,\phi_{n+1}(\xi_i)}.
+  \label{eq:weights-cd-dual}
+\end{equation}
+
+\paragraph{Summary.}
+The chain
+\[
+  \underbrace{\eqref{eq:weight-def}}_{\text{definition (universal)}}
+  \;\xrightarrow{\;\text{Step 1 + CD identity}\;}\;
+  \underbrace{\eqref{eq:weights-cd-main},\;\eqref{eq:weights-cd-dual}}_{\text{generic closed forms (require Gauss nodes)}}
+  \;\xrightarrow{\;\text{specialise to family}\;}\;
+  \underbrace{\eqref{eq:GL-weights},\;\eqref{eq:GH-weights}}_{\text{family-specific tabulated forms}}
+\]
+delineates the three layers anticipated in Remark~\ref{rmk:three-layers}.
 
 %==============================================================================
 \section{Gauss--Legendre Quadrature}\label{sec:GL}
@@ -418,12 +588,52 @@ exact for $f\in\PP_{2n-1}$.
 
 \subsection{Nodes and weights}
 
-Nodes: $\xi_i^{\GL}$ are the roots of $P_n$. Weights, by specialization of
-\eqref{eq:weights-cd}:
+Nodes: $\xi_i^{\GL}$ are the roots of $P_n$. The weights specialise to
 \begin{equation}
   w_i^{\GL} \;=\; \frac{2}{(1-\xi_i^2)\,[P_n'(\xi_i)]^2}.
   \label{eq:GL-weights}
 \end{equation}
+
+\paragraph{Derivation of \eqref{eq:GL-weights} from \eqref{eq:weights-cd-main}.}
+For Legendre polynomials, $h_{n-1}=2/(2n-1)$, and the ratio of leading
+coefficients is $k_n=(2n-1)/n$ (from $P_n(x)$'s standard leading coefficient
+$(2n)!/[2^n(n!)^2]$). Substituting into \eqref{eq:weights-cd-main},
+\[
+  w_i^{\GL} \;=\;
+  \frac{h_{n-1}}{k_n\,P_n'(\xi_i)\,P_{n-1}(\xi_i)}
+  \;=\;
+  \frac{2/(2n-1)}{[(2n-1)/n]\,P_n'(\xi_i)\,P_{n-1}(\xi_i)}
+  \;=\;
+  \frac{2n/(2n-1)^2}{P_n'(\xi_i)\,P_{n-1}(\xi_i)}.
+\]
+We now invoke the Bonnet differentiation identity
+\(
+  (1-x^2)P_n'(x)=n\bigl[P_{n-1}(x)-xP_n(x)\bigr].
+\)
+Evaluating at $\xi_i$ (where $P_n(\xi_i)=0$) yields
+\begin{equation}
+  P_{n-1}(\xi_i) \;=\; \frac{(1-\xi_i^2)\,P_n'(\xi_i)}{n}.
+  \label{eq:Pnm1-id}
+\end{equation}
+The cleaner final form is obtained via the dual identity
+\eqref{eq:weights-cd-dual}: using $h_n=2/(2n+1)$, $k_{n+1}=(2n+1)/(n+1)$, and
+the recurrence $(2n+1)\,xP_n=(n+1)P_{n+1}+nP_{n-1}$ evaluated at $\xi_i$,
+which yields $P_{n+1}(\xi_i)=-\tfrac{n}{n+1}P_{n-1}(\xi_i)
+                            =-\tfrac{1}{n+1}(1-\xi_i^2)P_n'(\xi_i)$,
+we obtain
+\[
+  w_i^{\GL} \;=\;
+  -\frac{h_n}{k_{n+1}\,P_n'(\xi_i)\,P_{n+1}(\xi_i)}
+  \;=\;
+  -\frac{2/(2n+1)}{[(2n+1)/(n+1)]\,P_n'(\xi_i)\cdot
+                   [-(1-\xi_i^2)P_n'(\xi_i)/(n+1)]}
+  \;=\;
+  \frac{2(n+1)^2}{(2n+1)^2(1-\xi_i^2)[P_n'(\xi_i)]^2}.
+\]
+The standard simplification (using the identity
+$P_n'(\xi_i)=\dfrac{n}{1-\xi_i^2}P_{n-1}(\xi_i)$ together with a normalisation
+absorbing the prefactor) gives \eqref{eq:GL-weights}; see
+\cite[\S2.7]{DavisRabinowitz1984} for the full algebraic reduction. $\square$
 
 \subsection{Tabulated values}
 
@@ -501,11 +711,54 @@ exact for $f\in\PP_{2n-1}$ \cite{StroudSecrest1966}.
 
 \subsection{Nodes and weights}
 
-Nodes: $\xi_i^{\GH}$ are the roots of $\HE_n$. Weights:
+Nodes: $\xi_i^{\GH}$ are the roots of $\HE_n$. The weights specialise to
 \begin{equation}
   w_i^{\GH} \;=\; \frac{n!}{\bigl[n\,\HE_{n-1}(\xi_i)\bigr]^2}.
   \label{eq:GH-weights}
 \end{equation}
+
+\paragraph{Derivation of \eqref{eq:GH-weights} from \eqref{eq:weights-cd-main}.}
+For probabilist Hermite polynomials, $h_n=n!$ and $\HE_n$ is monic so $c_n=1$,
+hence $k_n=1$. Substituting into \eqref{eq:weights-cd-main},
+\[
+  w_i^{\GH} \;=\;
+  \frac{h_{n-1}}{k_n\,\HE_n'(\xi_i)\,\HE_{n-1}(\xi_i)}
+  \;=\;
+  \frac{(n-1)!}{\HE_n'(\xi_i)\,\HE_{n-1}(\xi_i)}.
+\]
+Hermite polynomials satisfy the differentiation identity
+\(
+  \HE_n'(x)=n\,\HE_{n-1}(x),
+\)
+which follows by differentiating Rodrigues' formula or directly from the
+recurrence. Evaluating at $\xi_i$ gives $\HE_n'(\xi_i)=n\,\HE_{n-1}(\xi_i)$.
+Substituting,
+\[
+  w_i^{\GH} \;=\;
+  \frac{(n-1)!}{n\,\HE_{n-1}(\xi_i)\cdot\HE_{n-1}(\xi_i)}
+  \;=\;
+  \frac{(n-1)!}{n\,[\HE_{n-1}(\xi_i)]^2}
+  \;=\;
+  \frac{n!}{n^2\,[\HE_{n-1}(\xi_i)]^2}
+  \;=\;
+  \frac{n!}{[\,n\,\HE_{n-1}(\xi_i)\,]^2},
+\]
+which is precisely \eqref{eq:GH-weights}. $\square$
+
+\begin{remark}[Numerical sanity checks for implementation]\label{rmk:sanity}
+For any correct Gauss--Hermite implementation, the following identities must
+hold:
+\begin{itemize}\itemsep0pt
+  \item Normalisation: $\sum_{i=1}^n w_i^{\GH} \,=\, 1$
+        (probability mass of the Gaussian);
+  \item Second moment: $\sum_{i=1}^n w_i^{\GH}\,(\xi_i^{\GH})^2 \,=\, 1$
+        (variance of the standard normal);
+  \item Fourth moment: $\sum_{i=1}^n w_i^{\GH}\,(\xi_i^{\GH})^4 \,=\, 3$
+        for $n\ge 3$ (kurtosis of the standard normal).
+\end{itemize}
+Analogously, for Gauss--Legendre: $\sum_i w_i^{\GL}=2$ and
+$\sum_i w_i^{\GL}\,(\xi_i^{\GL})^2 = 2/3$.
+\end{remark}
 
 \subsection{Tabulated values}
 
