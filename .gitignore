@@ -16,3 +16,4 @@ desktop.ini
 # claude_article 暫存腳本與中繼檔（不納入版本控制）
 _*.py
 _*.json
+.gstack/
