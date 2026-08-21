@@ -1,0 +1,707 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.6cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,bm}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,allcolors=blue]{hyperref}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{example}[theorem]{Example}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\eps}{\epsilon_{\mathrm{dbl}}}
+\newcommand{\Mt}{\widetilde{\bm M}}
+\newcommand{\normF}[1]{\|#1\|_{F}}
+\newcommand{\rankn}{\operatorname{rank}_{\mathrm{num}}}
+
+\title{Numerical Rank Certification of Interpolation Moment Matrices\\
+by Column-Pivoted Householder QR Factorization}
+
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-3em}
+
+\begin{abstract}
+The construction of generalized interpolation weights on scattered
+three-dimensional stencils requires the solution of a dense
+$27\times27$ moment system $\bm M\bm\Psi=\bm C$ with
+$\bm M=\bm X^{\mathsf T}\bm W$, where $\bm X$ collects polynomial
+samples up to degree six and $\bm W$ collects Hermite--Wendland radial
+basis rows. Admissibility of a candidate stencil--parameter triple
+$(\text{stencil},\beta,h)$ hinges on whether $\bm M$ possesses full
+numerical rank in IEEE double precision. This note places the rank
+test used in our solver on a rigorous and fully referenced footing. We
+first review the Householder reflection and its role in orthogonal
+triangularization (Section~\ref{sec:householder}), then the QR
+factorization with column pivoting (QRCP) of Businger and Golub and
+its rank-revealing interpretation (Section~\ref{sec:qrcp}), and
+finally state the complete certification algorithm employed in our
+code: iterative row/column max-norm equilibration, a three-stage
+sequence of rank gates, and the acceptance criterion
+$p_i>\tau_{\widetilde M}$ with
+$\tau_{\widetilde M}=27\,\eps\,\normF{\Mt}$
+(Section~\ref{sec:algorithm}). The threshold is shown to follow the
+standard backward-error convention of numerical linear algebra, and
+the result is characterized precisely as a double-precision numerical
+certificate rather than a symbolic proof of nonsingularity.
+\end{abstract}
+
+%=====================================================================
+\section{Householder reflections and orthogonal triangularization}
+\label{sec:householder}
+
+The elementary orthogonal transformation underlying all algorithms in
+this note is the Householder reflection, introduced by
+Householder~\cite{householder1958} as a tool for the unitary
+triangularization of general matrices; systematic treatments are given
+by Golub and Van Loan~\cite[\S5.1]{golubvanloan2013} and Trefethen and
+Bau~\cite[Lecture~10]{trefethenbau1997}.
+
+\begin{definition}[Householder reflector]
+\label{def:householder}
+Let $\bm v\in\R^{m}$, $\bm v\neq\bm 0$. The matrix
+\begin{equation}
+  \bm H \;=\; \bm I - 2\,\frac{\bm v\bm v^{\mathsf T}}
+                              {\bm v^{\mathsf T}\bm v}
+  \label{eq:H-def}
+\end{equation}
+is called a Householder reflector with Householder vector $\bm v$.
+\end{definition}
+
+Geometrically, $\bm H$ realizes the reflection of $\R^{m}$ across the
+hyperplane $\{\bm x:\bm v^{\mathsf T}\bm x=0\}$ orthogonal to
+$\bm v$~\cite[Lecture~10]{trefethenbau1997}. Two properties follow
+directly from~\eqref{eq:H-def}: $\bm H$ is symmetric,
+$\bm H=\bm H^{\mathsf T}$, and orthogonal,
+$\bm H^{\mathsf T}\bm H=\bm I$, hence involutory,
+$\bm H^{2}=\bm I$.
+
+The utility of the reflector lies in its ability to annihilate all but
+the first component of a prescribed vector.
+
+\begin{lemma}[Annihilation property]
+\label{lem:annihilation}
+Let $\bm a\in\R^{m}$ with $\alpha=\|\bm a\|_{2}>0$ and
+$\bm a\neq\alpha\,\bm e_{1}$. Choose
+$\bm v=\bm a-\alpha\,\bm e_{1}$ and let $\bm H$ be the reflector
+\eqref{eq:H-def}. Then
+\begin{equation}
+  \bm H\bm a \;=\; \alpha\,\bm e_{1}.
+  \label{eq:Ha}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Write $a_{1}=\bm e_{1}^{\mathsf T}\bm a$. Direct computation gives
+\begin{equation}
+  \bm v^{\mathsf T}\bm a
+   =(\bm a-\alpha\bm e_{1})^{\mathsf T}\bm a
+   =\alpha^{2}-\alpha a_{1},
+\end{equation}
+\begin{equation}
+  \bm v^{\mathsf T}\bm v
+   =(\bm a-\alpha\bm e_{1})^{\mathsf T}(\bm a-\alpha\bm e_{1})
+   =\alpha^{2}-2\alpha a_{1}+\alpha^{2}
+   =2\bigl(\alpha^{2}-\alpha a_{1}\bigr).
+\end{equation}
+Hence $\bm v^{\mathsf T}\bm a/\bm v^{\mathsf T}\bm v=\tfrac12$, and
+therefore
+\begin{equation}
+  \bm H\bm a
+   =\bm a-2\,\frac{\bm v^{\mathsf T}\bm a}{\bm v^{\mathsf T}\bm v}\,\bm v
+   =\bm a-\bm v
+   =\alpha\,\bm e_{1}. \qedhere
+\end{equation}
+\end{proof}
+
+In finite-precision implementations the sign of $\alpha$ is chosen as
+$\alpha=-\operatorname{sign}(a_{1})\|\bm a\|_{2}$ so that the
+subtraction forming $\bm v$ incurs no cancellation; see
+Higham~\cite[\S19.1]{higham2002} and
+\cite[\S5.1.3]{golubvanloan2013}.
+
+Applying Lemma~\ref{lem:annihilation} recursively to the trailing
+submatrices of $\bm A\in\R^{m\times n}$ produces the Householder QR
+factorization: after $n$ steps,
+\begin{equation}
+  \bm H_{n}\cdots\bm H_{2}\bm H_{1}\,\bm A=\bm R,
+  \qquad
+  \bm A=\bm Q\bm R,
+  \qquad
+  \bm Q=\bm H_{1}\bm H_{2}\cdots\bm H_{n},
+\end{equation}
+with $\bm R$ upper triangular and $\bm Q$ orthogonal. The decisive
+advantage of this construction over Gram--Schmidt or Gaussian
+elimination is its backward stability: the computed factors are the
+exact factors of a perturbed matrix $\bm A+\Delta\bm A$ with
+$\normF{\Delta\bm A}\le c(m,n)\,\eps\,\normF{\bm A}$ for a modest
+polynomial $c(m,n)$, where $\eps\approx2.22\times10^{-16}$ denotes the
+unit roundoff of IEEE binary64 arithmetic; see
+Higham~\cite[Thm.~19.4]{higham2002} and
+\cite[\S5.1.9]{golubvanloan2013}. This backward-error bound is the
+quantitative basis of the rank threshold adopted in
+Section~\ref{sec:algorithm}.
+
+%=====================================================================
+\section{QR factorization with column pivoting and numerical rank}
+\label{sec:qrcp}
+
+\subsection{The Businger--Golub algorithm}
+
+The QR factorization with column pivoting (QRCP) was introduced by
+Businger and Golub~\cite{busingergolub1965} in the context of linear
+least-squares problems with (nearly) rank-deficient coefficient
+matrices; the canonical modern description is
+\cite[\S5.4.2]{golubvanloan2013}. Given $\bm A\in\R^{m\times n}$,
+QRCP computes a permutation matrix $\bm P$, an orthogonal $\bm Q$, and
+an upper-triangular $\bm R$ such that
+\begin{equation}
+  \bm A\bm P=\bm Q\bm R.
+  \label{eq:qrcp}
+\end{equation}
+At step $k$ the algorithm selects, among the not-yet-processed
+columns, the one whose trailing subcolumn (rows $k{:}m$) has largest
+Euclidean norm, swaps it into position $k$, and annihilates its
+subdiagonal entries with a Householder reflector
+(Lemma~\ref{lem:annihilation}). The greedy pivot selection enforces
+the monotonicity
+\begin{equation}
+  |r_{11}|\;\ge\;|r_{22}|\;\ge\;\cdots\;\ge\;|r_{qq}|,
+  \qquad q=\min(m,n),
+  \label{eq:monotone}
+\end{equation}
+and, more strongly, guarantees that each diagonal entry dominates the
+trailing block column-wise,
+$r_{kk}^{2}\ge\sum_{i=k}^{j}r_{ij}^{2}$ for all $j\ge
+k$~\cite[\S5.4.2]{golubvanloan2013}. The reference implementation in
+LAPACK is the routine \texttt{xGEQP3}~\cite{lapack1999}, the BLAS-3
+formulation of Quintana-Ort\'{\i}, Sun, and
+Bischof~\cite{quintanaorti1998}. The algorithm is deterministic: the
+pivot at every step is defined by exact column-norm comparisons, so
+repeated executions on the same data produce identical factorizations,
+in contrast to randomized rank estimators.
+
+\subsection{Mechanics of the pivot residual: trailing norms and their
+evolution}
+\label{sec:pivotresidual}
+
+The quantity compared against the rank tolerance in
+Section~\ref{sec:algorithm} is the \emph{pivot residual}
+$p_k$ of step $k$. This subsection makes its definition, its
+evolution under the reflections, and its geometric meaning precise,
+since all three are essential to a correct reading of the acceptance
+test: the residual is a property of the \emph{partially factored}
+working matrix, not of the raw data.
+
+Let $\bm A^{(0)}=\bm A\in\R^{m\times n}$ denote the (preprocessed)
+input and let
+\begin{equation}
+  \bm A^{(k)}
+  \;=\;
+  \bm H_{k-1}\cdots\bm H_{1}\bm H_{0}\,\bm A\,\bm P_{0}\bm P_{1}\cdots
+  \bm P_{k-1}
+  \label{eq:workingmatrix}
+\end{equation}
+be the working matrix after $k$ pivoted reflection steps. For every
+not-yet-selected column $j$, define its \emph{trailing norm} at step
+$k$ as the Euclidean norm of its subvector below the already
+triangularized block,
+\begin{equation}
+  \nu_k(j)
+  \;=\;
+  \Bigl(\textstyle\sum_{i=k}^{m-1}
+        \bigl(a^{(k)}_{ij}\bigr)^{2}\Bigr)^{1/2},
+  \qquad
+  p_k=\max_{j\,\text{unselected}}\nu_k(j).
+  \label{eq:trailingnorm}
+\end{equation}
+The leading components $a^{(k)}_{ij}$, $i<k$, are excluded: after the
+first $k$ reflections they carry the coefficients of column $j$ with
+respect to the already selected directions---entries of rows
+$0,\dots,k-1$ of $\bm R$---and therefore contribute nothing new to
+linear independence. At $k=0$ the trailing norm coincides with the raw
+column norm; for every $k\ge1$ it is a quantity \emph{manufactured by
+the preceding reflections}.
+
+\begin{proposition}[Pivot residual equals the produced diagonal entry]
+\label{prop:trailing}
+At step $k$, let column $j^{\ast}$ attain the maximum in
+\eqref{eq:trailingnorm} and be swapped into position $k$. Then the
+diagonal entry created by the $k$th Householder reflection satisfies
+\begin{equation}
+  |r_{kk}|=\nu_k(j^{\ast})=p_k .
+\end{equation}
+Consequently the acceptance test $p_k>\tau$ may be evaluated
+\emph{before} the reflection is formed, with a result identical to
+inspecting $|r_{kk}|$ afterwards.
+\end{proposition}
+
+\begin{proof}
+Write $\bm x\in\R^{m-k}$ for the trailing subvector of the pivot
+column, so $\|\bm x\|_{2}=\nu_k(j^{\ast})$. By
+Lemma~\ref{lem:annihilation} the reflector acting on components
+$k,\dots,m-1$ maps $\bm x$ to $\alpha\,\bm e_{1}$ with
+$|\alpha|=\|\bm x\|_{2}$, and $\alpha$ is precisely the entry stored
+in position $(k,k)$ of $\bm R$. Orthogonality of the reflector
+preserves the Euclidean length, so no other value is possible.
+\end{proof}
+
+Geometrically, the leading/trailing split of a working column is its
+orthogonal decomposition with respect to the span of the selected
+pivot columns:
+\begin{equation}
+  \underbrace{\bigl(a^{(k)}_{0j},\dots,a^{(k)}_{k-1,j}\bigr)}
+             _{\text{component inside the selected subspace}}
+  \;\Big|\;
+  \underbrace{\bigl(a^{(k)}_{kj},\dots,a^{(k)}_{m-1,j}\bigr)}
+             _{\text{component orthogonal to it}},
+\end{equation}
+so $\nu_k(j)$ is the Euclidean distance from column $j$ to the
+subspace spanned by the $k$ columns already selected. A large
+residual certifies a genuinely new direction; a residual below the
+roundoff-level tolerance means the column lies, to double precision,
+inside the subspace already captured---numerical linear dependence.
+This is why the pivot residual measures \emph{independence} rather
+than mere \emph{magnitude}, and why raw column norms cannot replace
+it, as the following example shows.
+
+\begin{example}[Raw norms cannot reveal rank]
+\label{ex:nearparallel}
+Let $\delta=10^{-15}$ and consider the two columns
+\begin{equation}
+  \bm a_{1}=(1,\,0,\,0)^{\mathsf T},
+  \qquad
+  \bm a_{2}=(1,\,\delta,\,0)^{\mathsf T},
+\end{equation}
+which are numerically parallel. Their raw norms are
+$\|\bm a_{1}\|_{2}=1$ and $\|\bm a_{2}\|_{2}=\sqrt{1+\delta^{2}}
+\approx1$; a test based on raw norms would count two directions and
+report rank $2$. Under QRCP, step $0$ selects $\bm a_{1}$
+($p_{0}=1$), and the reflection moves the component of $\bm a_{2}$
+along $\bm a_{1}$ into the leading position, leaving the trailing
+norm $\nu_{1}(2)=\delta=10^{-15}$. Against any tolerance of the
+backward-error magnitude \eqref{eq:tolfamily} this residual fails,
+$p_{1}\le\tau$, and the numerical rank is correctly reported as $1$.
+The reflections thus convert magnitude information into independence
+information; omitting them (or measuring full-length norms of the
+unreflected data) invalidates the test from the second step onward.
+\end{example}
+
+Two further consequences of orthogonal invariance fix the roles of the
+two norms appearing in the acceptance test $p_k>\tau$.
+
+\begin{proposition}[The tolerance is frozen; the residuals evolve]
+\label{prop:frozen}
+The Frobenius norm is invariant under orthogonal transformations and
+column permutations,
+$\normF{\bm H\bm A\bm P}=\normF{\bm A}$, since
+$\normF{\bm H\bm A}^{2}
+=\operatorname{tr}(\bm A^{\mathsf T}\bm H^{\mathsf T}\bm H\bm A)
+=\normF{\bm A}^{2}$. Hence the tolerance
+$\tau=f(m,n)\,\eps\,\normF{\bm A^{(0)}}$, computed once from the
+preprocessed input before the factorization begins, retains its value
+in exact arithmetic throughout all steps; recomputing it would change
+nothing except adding roundoff. The test $p_k>\tau$ therefore
+compares an evolving measurement (the trailing norm, updated by every
+reflection) against a fixed ruler (the roundoff-level noise bound of
+the whole matrix).
+\end{proposition}
+
+\begin{remark}[Interleaved termination]
+\label{rem:interleaved}
+Textbook descriptions sometimes present rank determination as a
+post-processing pass over the completed diagonal of $\bm R$. By
+Proposition~\ref{prop:trailing} and the monotonicity
+\eqref{eq:monotone}, the interleaved variant---test $p_k>\tau$ at
+the top of every step and terminate at the first failure---produces
+the identical rank count while offering two advantages. First,
+efficiency: since $p_k$ is the \emph{maximum} remaining residual, its
+failure guarantees that all subsequent pivots fail as well, so the
+remaining reflections are provably useless work. Second, numerical
+hygiene: forming a reflector from a pivot of roundoff-level norm
+divides by the near-zero quantity $\bm v^{\mathsf T}\bm v$ and
+sprays amplified noise into all remaining trailing blocks; stopping
+before the degenerate reflection keeps the working matrix
+uncontaminated. The rank-deficient least-squares driver
+\texttt{xGELSY} of LAPACK adopts the same interleaved
+strategy~\cite{lapack1999}.
+\end{remark}
+
+\subsection{Rank-revealing interpretation}
+
+Because $\bm Q$ is orthogonal, the singular values of $\bm R$ coincide
+with those of $\bm A$, and the profile of the diagonal
+\eqref{eq:monotone} exposes the numerical rank: if
+$|r_{kk}|$ is large for $k\le r$ and collapses to roundoff level for
+$k>r$, then $\bm A$ has numerical rank $r$. Factorizations of the
+form \eqref{eq:qrcp} whose triangular factor reliably separates the
+dominant and negligible parts of the spectrum were named
+\emph{rank-revealing QR} (RRQR) factorizations by
+Chan~\cite{chan1987}. Interlacing arguments give the a priori bounds
+\begin{equation}
+  \sigma_{k}(\bm A)\;\ge\;|r_{kk}|
+  \quad\text{is not guaranteed in general, but}\quad
+  |r_{kk}|\;\le\;\sqrt{n-k+1}\,\sigma_{k}(\bm A),
+\end{equation}
+so a small pivot certifies a small singular value; the converse can
+fail for contrived matrices. The classical counterexample is the
+Kahan matrix~\cite{kahan1966}, for which the Businger--Golub pivots
+decay far more slowly than the smallest singular value. Gu and
+Eisenstat~\cite{gueisenstat1996} constructed \emph{strong} RRQR
+algorithms with provable factor bounds that close this gap at modest
+extra cost. In practice, however, QRCP fails to reveal rank only on
+such adversarial examples; for equilibrated matrices of moderate
+dimension it is the standard, inexpensive alternative to the singular
+value decomposition, and it underlies the rank-deficient least-squares
+driver \texttt{xGELSY} of LAPACK~\cite{lapack1999}.
+
+\subsection{Numerical rank and tolerance conventions}
+
+For a matrix stored and factored in floating-point arithmetic, rank is
+meaningful only relative to a tolerance
+$\tau$~\cite[\S5.4.1]{golubvanloan2013}: one defines
+\begin{equation}
+  \rankn(\bm A;\tau)
+  \;=\;
+  \#\{\,k:\ \sigma_{k}(\bm A)>\tau\,\}
+  \quad\text{or, in the QRCP surrogate,}\quad
+  \#\{\,k:\ p_{k}>\tau\,\},
+  \label{eq:numrank}
+\end{equation}
+where $p_{k}$ denotes the $k$th pivot magnitude (the trailing
+column-norm residual, equal to $|r_{kk}|$ at selection time). The
+tolerance must dominate the backward error of the computation itself;
+otherwise the test would attribute significance to quantities that are
+indistinguishable from roundoff. Since Householder QR applied to
+$\bm A\in\R^{n\times n}$ is backward stable with perturbation bound
+proportional to $n\,\eps\,\|\bm A\|$~\cite[Thm.~19.4]{higham2002},
+tolerances of the generic form
+\begin{equation}
+  \tau \;=\; f(m,n)\,\eps\,\|\bm A\|
+  \label{eq:tolfamily}
+\end{equation}
+are the accepted convention, with $f$ a low-degree polynomial of the
+dimensions and $\|\cdot\|$ a computable norm. Instances of this
+family include the default tolerance
+$\max(m,n)\,\eps\,\sigma_{\max}(\bm A)$ used for numerical rank
+determination in standard software following
+\cite[\S5.4.1]{golubvanloan2013}, and the relative-pivot condition
+$|r_{kk}|/|r_{11}|>\mathrm{RCOND}$ of
+\texttt{xGELSY}~\cite{lapack1999}. The particular member of the
+family used in our solver is specified and justified next.
+
+%=====================================================================
+\section{The certification algorithm}
+\label{sec:algorithm}
+
+\subsection{Setting}
+
+For every candidate triple $(\text{stencil},\beta,h)$ of a
+$27$-point interpolation stencil, Wendland shape parameter
+$\beta$, and support radius $h$, our generalized-interpolation
+solver assembles a moment matrix
+\begin{equation}
+  \bm M=\bm X^{\mathsf T}\bm W\in\R^{27\times27},
+\end{equation}
+where the columns of $\bm X$ sample the polynomial basis of total
+degree at most six on the stencil nodes and the columns of $\bm W$
+contain Hermite--Wendland radial-basis
+rows~\cite{wendland1995,wu1992}. The interpolation weights $\bm\Psi$
+solve $\bm M\bm\Psi=\bm C$ for a prescribed moment vector $\bm C$. A
+triple is \emph{admissible} if and only if this system is uniquely
+solvable in double precision, i.e.\ if $\bm M$ has full numerical
+rank $27$ in the sense of \eqref{eq:numrank}. Existence and
+uniqueness of $\bm\Psi$ is governed by $\operatorname{rank}(\bm M)$
+alone; the auxiliary tests on $\bm X$ and $\bm W$ described below are
+diagnostic accelerators, not additional mathematical requirements.
+
+\subsection{Row/column equilibration}
+\label{sec:equilibration}
+
+The entries of $\bm M$ mix polynomial degrees one through six and can
+span many orders of magnitude. A pivot-magnitude test applied to the
+raw matrix could then mistake benign scale imbalance for rank
+deficiency, since column norms---the very quantities QRCP
+pivots on---would reflect degree scaling rather than linear
+independence. Diagonal scaling is the classical remedy: van der
+Sluis~\cite{vandersluis1969} showed that norm equilibration brings the
+condition number within a modest factor of its optimum over all
+diagonal scalings. We employ the iterative row/column scheme in the
+max norm, of the family analyzed by Ruiz~\cite{ruiz2001}: six sweeps,
+each consisting of a row pass followed by a column pass,
+\begin{equation}
+\begin{aligned}
+ s_i^{\mathrm{row}}&=\max_j|\widetilde M_{ij}|,&
+ \widetilde M_{i:}&\leftarrow\widetilde M_{i:}/s_i^{\mathrm{row}},&
+ d_i^{\mathrm{row}}&\leftarrow d_i^{\mathrm{row}}/s_i^{\mathrm{row}},\\
+ s_j^{\mathrm{col}}&=\max_i|\widetilde M_{ij}|,&
+ \widetilde M_{:j}&\leftarrow\widetilde M_{:j}/s_j^{\mathrm{col}},&
+ d_j^{\mathrm{col}}&\leftarrow d_j^{\mathrm{col}}/s_j^{\mathrm{col}},
+\end{aligned}
+\label{eq:sweep}
+\end{equation}
+initialized with $\widetilde{\bm M}\leftarrow\bm M$ and
+$d_i^{\mathrm{row}}=d_j^{\mathrm{col}}=1$. Only the diagonals are
+stored, as vectors $\texttt{Dr}[27]$ and $\texttt{Dc}[27]$. After the
+sweeps,
+\begin{equation}
+  \Mt=\bm D_r\bm M\bm D_c,
+  \qquad
+  \bm D_r=\operatorname{diag}(d_0^{\mathrm{row}},\dots,d_{26}^{\mathrm{row}}),
+  \qquad
+  \bm D_c=\operatorname{diag}(d_0^{\mathrm{col}},\dots,d_{26}^{\mathrm{col}}),
+  \label{eq:equilibrated}
+\end{equation}
+with all diagonal entries positive and finite. Hence $\bm D_r$ and
+$\bm D_c$ are nonsingular and
+\begin{equation}
+  \operatorname{rank}(\Mt)=\operatorname{rank}(\bm M),
+\end{equation}
+so equilibration alters the numerical scaling but not the exact rank.
+Consistency is preserved when the linear system is eventually solved:
+with $\widetilde{\bm C}=\bm D_r\bm C$, the solution $\bm y$ of
+$\Mt\bm y=\widetilde{\bm C}$ yields $\bm\Psi=\bm D_c\bm y$, since
+$\bm D_r\bm M\bm D_c\bm y=\bm D_r\bm C$ is equivalent to
+$\bm M\bm\Psi=\bm C$.
+
+\subsection{Three-stage rank gates and acceptance threshold}
+
+Deterministic QRCP (Section~\ref{sec:qrcp}) is applied in three
+stages. The first two stages test column-normalized copies of $\bm X$
+and $\bm W$ individually; they serve as early-exit filters and as
+diagnostics that attribute a failure either to degenerate stencil
+geometry (rank loss in $\bm X$) or to an unsuitable
+radial-basis parameter pair $(\beta,h)$ (rank loss in $\bm W$).
+They are necessary conditions for the admissibility of the product,
+because
+\begin{equation}
+  \operatorname{rank}(\bm X^{\mathsf T}\bm W)
+  \;\le\;
+  \min\{\operatorname{rank}(\bm X),\operatorname{rank}(\bm W)\},
+\end{equation}
+but they are not sufficient: full rank of both factors does not imply
+full rank of their product. The decisive third stage therefore
+applies QRCP to $\Mt^{\mathsf T}$ and counts as an independent
+direction every pivot whose residual magnitude---the trailing norm
+of Proposition~\ref{prop:trailing}, evaluated at the top of each step
+and compared against the tolerance frozen at entry
+(Proposition~\ref{prop:frozen}, Remark~\ref{rem:interleaved})---exceeds
+\begin{equation}
+  \boxed{\;
+  p_i \;>\; \tau_{\widetilde M},
+  \qquad
+  \tau_{\widetilde M}\;=\;27\,\eps\,\normF{\Mt}.
+  \;}
+  \label{eq:threshold}
+\end{equation}
+The triple is accepted, and weights are exported, if and only if all
+three gates report numerical rank $27$:
+\begin{equation}
+  \rankn(\bm X)=27,\qquad
+  \rankn(\bm W)=27,\qquad
+  \rankn(\Mt)=27.
+\end{equation}
+The complete procedure is summarized in
+Algorithm~\ref{alg:certification}.
+
+\begin{algorithm}[t]
+\caption{Numerical rank certification of a candidate triple
+$(\text{stencil},\beta,h)$}
+\label{alg:certification}
+\begin{algorithmic}[1]
+\State Assemble $\bm X,\bm W\in\R^{27\times27}$;
+       form $\bm M=\bm X^{\mathsf T}\bm W$
+\State \textbf{Gate 1:} QRCP on column-normalized $\bm X$;
+       \textbf{if} $\rankn(\bm X)<27$ \textbf{reject} (stencil geometry)
+\State \textbf{Gate 2:} QRCP on column-normalized $\bm W$;
+       \textbf{if} $\rankn(\bm W)<27$ \textbf{reject} (RBF parameters)
+\State $\Mt\leftarrow\bm M$;\quad
+       $\texttt{Dr}[i]\leftarrow1$, $\texttt{Dc}[j]\leftarrow1$
+\For{$k=1,\dots,6$} \Comment{equilibration sweeps, Eq.~\eqref{eq:sweep}}
+  \State row pass: divide each row of $\Mt$ by its max-norm;
+         accumulate in \texttt{Dr}
+  \State column pass: divide each column of $\Mt$ by its max-norm;
+         accumulate in \texttt{Dc}
+\EndFor
+\State $\tau_{\widetilde M}\leftarrow27\,\eps\,\normF{\Mt}$
+\State \textbf{Gate 3:} deterministic QRCP on $\Mt^{\mathsf T}$;
+       count pivots with $p_i>\tau_{\widetilde M}$
+\If{count $=27$}
+  \State \textbf{accept}; on demand solve
+         $\Mt\bm y=\bm D_r\bm C$ and return
+         $\bm\Psi=\bm D_c\bm y$
+\Else
+  \State \textbf{reject}; advance to the next
+         $(\text{stencil},\beta,h)$ trial
+\EndIf
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Justification of the threshold}
+
+The tolerance \eqref{eq:threshold} is the member of the standard
+family \eqref{eq:tolfamily} obtained with dimension factor
+$f=n=27$ and the Frobenius norm as the computable measure of
+$\|\Mt\|$. Its role follows directly from backward stability: the
+computed factorization corresponds exactly to a perturbed matrix
+$\Mt+\Delta$ with $\normF{\Delta}\le c(n)\,\eps\,\normF{\Mt}$
+\cite[Thm.~19.4]{higham2002}, so any pivot residual below the level
+$n\,\eps\,\normF{\Mt}$ lies within the uncertainty introduced by the
+arithmetic itself and cannot be distinguished from a numerically zero
+direction. Two remarks make the choice precise.
+
+\begin{remark}[Conservativeness of the Frobenius norm]
+Since $\|\bm A\|_{2}\le\normF{\bm A}\le\sqrt{n}\,\|\bm A\|_{2}$, the
+tolerance $27\,\eps\,\normF{\Mt}$ is at least as large as the
+spectral-norm variant $27\,\eps\,\sigma_{\max}(\Mt)$
+recommended in \cite[\S5.4.1]{golubvanloan2013}. The test is
+therefore conservative---biased toward rejection---while avoiding
+the cost of estimating $\sigma_{\max}$. After the equilibration of
+Section~\ref{sec:equilibration} the entries of $\Mt$ are of order
+unity, so the two norms differ by at most the benign factor
+$\sqrt{27}$.
+\end{remark}
+
+\begin{remark}[Nature of the certificate]
+\label{rem:certificate}
+A passed Gate~3 asserts that all $27$ QRCP pivots of $\Mt^{\mathsf T}$
+exceed the roundoff-level tolerance \eqref{eq:threshold} in IEEE
+double precision. In view of the Kahan
+counterexample~\cite{kahan1966} and the strong-RRQR theory of Gu and
+Eisenstat~\cite{gueisenstat1996}, this constitutes a
+\emph{double-precision numerical certificate} of
+$\rankn(\bm M)=27$---sufficient for the reliable solution of
+$\bm M\bm\Psi=\bm C$ in the same arithmetic---and not a symbolic proof
+of $\det(\bm M)\neq0$. For equilibrated matrices of dimension $27$
+arising from non-adversarial stencil geometries, the gap between the
+two notions is immaterial in practice, and QRCP-based rank
+determination is the established inexpensive surrogate for the
+singular value decomposition~\cite{chan1987,lapack1999}.
+\end{remark}
+
+%=====================================================================
+\section*{Concluding note}
+
+The certification procedure of Section~\ref{sec:algorithm} is built
+entirely from classical, well-audited components: Householder
+reflections~\cite{householder1958,golubvanloan2013,trefethenbau1997},
+the Businger--Golub column-pivoted QR
+factorization~\cite{busingergolub1965,quintanaorti1998,lapack1999},
+rank-revealing interpretation and its known
+limitations~\cite{chan1987,kahan1966,gueisenstat1996}, iterative
+max-norm equilibration~\cite{vandersluis1969,ruiz2001}, and the
+standard backward-error tolerance convention~\cite{higham2002,
+golubvanloan2013}. The only problem-specific ingredients are the
+dimension $n=27$, fixed by the D3Q27 interpolation stencil, and the
+three-gate ordering, which converts the mathematical
+characterization---unique solvability if and only if
+$\operatorname{rank}(\bm M)=27$---into an efficient and diagnosable
+selection loop over candidate triples $(\text{stencil},\beta,h)$.
+
+%=====================================================================
+\begin{thebibliography}{99}
+
+\bibitem{householder1958}
+A.~S. Householder,
+\newblock Unitary triangularization of a nonsymmetric matrix,
+\newblock \emph{Journal of the ACM}, 5(4):339--342, 1958.
+
+\bibitem{busingergolub1965}
+P.~Businger and G.~H. Golub,
+\newblock Linear least squares solutions by {H}ouseholder
+transformations,
+\newblock \emph{Numerische Mathematik}, 7:269--276, 1965.
+
+\bibitem{golubvanloan2013}
+G.~H. Golub and C.~F. Van~Loan,
+\newblock \emph{Matrix Computations},
+\newblock 4th edition, Johns Hopkins University Press, Baltimore,
+2013. (QR with column pivoting: \S5.4.2; numerical rank and the SVD:
+\S5.4.1; Householder reflections: \S5.1.)
+
+\bibitem{trefethenbau1997}
+L.~N. Trefethen and D.~Bau, III,
+\newblock \emph{Numerical Linear Algebra},
+\newblock SIAM, Philadelphia, 1997. (Householder triangularization:
+Lecture~10.)
+
+\bibitem{higham2002}
+N.~J. Higham,
+\newblock \emph{Accuracy and Stability of Numerical Algorithms},
+\newblock 2nd edition, SIAM, Philadelphia, 2002. (Backward stability
+of Householder QR: Chapter~19, Theorem~19.4.)
+
+\bibitem{chan1987}
+T.~F. Chan,
+\newblock Rank revealing {QR} factorizations,
+\newblock \emph{Linear Algebra and its Applications},
+88--89:67--82, 1987.
+
+\bibitem{gueisenstat1996}
+M.~Gu and S.~C. Eisenstat,
+\newblock Efficient algorithms for computing a strong rank-revealing
+{QR} factorization,
+\newblock \emph{SIAM Journal on Scientific Computing},
+17(4):848--869, 1996.
+
+\bibitem{kahan1966}
+W.~Kahan,
+\newblock Numerical linear algebra,
+\newblock \emph{Canadian Mathematical Bulletin}, 9:757--801, 1966.
+
+\bibitem{quintanaorti1998}
+G.~Quintana-Ort\'{\i}, X.~Sun, and C.~H. Bischof,
+\newblock A {BLAS}-3 version of the {QR} factorization with column
+pivoting,
+\newblock \emph{SIAM Journal on Scientific Computing},
+19(5):1486--1494, 1998.
+
+\bibitem{lapack1999}
+E.~Anderson, Z.~Bai, C.~Bischof, S.~Blackford, J.~Demmel, J.~Dongarra,
+J.~Du~Croz, A.~Greenbaum, S.~Hammarling, A.~McKenney, and D.~Sorensen,
+\newblock \emph{{LAPACK} Users' Guide},
+\newblock 3rd edition, SIAM, Philadelphia, 1999. (Routines
+\texttt{xGEQP3}, \texttt{xGELSY}.)
+
+\bibitem{vandersluis1969}
+A.~van~der~Sluis,
+\newblock Condition numbers and equilibration of matrices,
+\newblock \emph{Numerische Mathematik}, 14:14--23, 1969.
+
+\bibitem{ruiz2001}
+D.~Ruiz,
+\newblock A scaling algorithm to equilibrate both rows and columns
+norms in matrices,
+\newblock Technical Report RAL-TR-2001-034, Rutherford Appleton
+Laboratory, Oxfordshire, 2001.
+
+\bibitem{wendland1995}
+H.~Wendland,
+\newblock Piecewise polynomial, positive definite and compactly
+supported radial functions of minimal degree,
+\newblock \emph{Advances in Computational Mathematics}, 4:389--396,
+1995.
+
+\bibitem{wu1992}
+Z.~Wu,
+\newblock Hermite--{B}irkhoff interpolation of scattered data by
+radial basis functions,
+\newblock \emph{Approximation Theory and its Applications},
+8(2):1--10, 1992.
+
+\end{thebibliography}
+
+\end{document}

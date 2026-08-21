@@ -1,0 +1,2999 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,margin=2.3cm,headheight=15pt]{geometry}
+\usepackage{fontspec}
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm}
+\usepackage{booktabs,tabularx,longtable,array,multirow}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{xurl}
+\usepackage{listings}
+\lstdefinestyle{spec}{
+  language=C, basicstyle=\ttfamily\footnotesize, columns=fullflexible,
+  keepspaces=true, breaklines=true, breakatwhitespace=true,
+  showstringspaces=false, commentstyle=\color{black!55}\itshape,
+  frame=single, framerule=0.4pt, rulecolor=\color{black!35},
+  xleftmargin=0.5em, xrightmargin=0.5em, aboveskip=1.1em, belowskip=1.1em,
+}
+\lstset{style=spec}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!55!black,
+  citecolor=green!45!black,
+  urlcolor=blue!65!black,
+  pdftitle={A high-order meshless departure-point interpolation operator for
+            semi-Lagrangian lattice Boltzmann methods},
+  pdfauthor={Edit17 CCSLBM project}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small LABFM departure-point interpolation}
+\rhead{\small Theory and algorithm specification}
+\cfoot{\thepage}
+
+\setlength{\parindent}{1.2em}
+\setlength{\parskip}{0.25em}
+\setlength{\emergencystretch}{3em}
+\setlist{nosep,leftmargin=2.0em}
+\renewcommand{\arraystretch}{1.2}
+
+% 可換行、左對齊的固定寬度欄（取代不換行的 l，避免把 X 欄擠扁）
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+% 寬表統一樣式：小一級字、放寬列距、允許連字斷行
+\newenvironment{widetable}
+  {\begingroup\small\setlength{\tabcolsep}{4pt}%
+   \renewcommand{\arraystretch}{1.15}%
+   \setlength{\LTpre}{0.8em}\setlength{\LTpost}{0.8em}}
+  {\endgroup}
+
+\newcommand{\rji}{\bm{r}_{ji}}
+\newcommand{\New}{\textcolor{blue!60!black}{\textsf{[N]}}}
+\newcommand{\TBD}{\textcolor{red!70!black}{\textsf{[U]}}}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}{Proposition}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+
+\title{\bfseries A high-order meshless departure-point interpolation operator\\
+for semi-Lagrangian lattice Boltzmann methods:\\[0.25em]
+\large theory, provenance, and algorithm specification}
+\author{Edit17\_CCSLBM project --- internal technical report}
+\date{11 August 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+This report specifies the theoretical basis for replacing the tensor-product
+Lagrange interpolation of an interpolation-supplemented (semi-Lagrangian) lattice
+Boltzmann solver with an operator constructed by the Local Anisotropic Basis
+Function Method (LABFM) of King, Lind and Nasar~\cite{KLN2020,KL2021}. The central
+observation is that the LABFM moment matrix is independent of the operator being
+approximated; consequently a single local factorisation yields, at no additional
+matrix cost, a family of \emph{off-node interpolation} operators---one per discrete
+velocity---in addition to the differential operators for which LABFM was originally
+formulated. Polynomial reproduction, constant preservation, the degenerate
+zero-displacement limit, the truncation error and its amplification constant, a von
+Neumann stability criterion for the streaming step, and invariance under local affine
+rescaling are each established with proof. A generalised moving least squares
+formulation of the same departure-point operator is specified alongside as a control
+arm; it is proved to possess identical polynomial reproduction, so that the order of
+accuracy is \emph{not} a discriminator between the two constructions and the choice
+between them reduces to a single structural difference in the conditioning of the
+local system. Every statement is labelled either with an
+explicit equation-level citation to the source publication, with a proof given here,
+or as an open item that must be measured before it may be used as an implementation
+assumption. One correction is load-bearing: the boundary claim of the 2020 paper, that
+incomplete stencils yield one-sided differential operators of the internal order, is
+superseded by the 2021 paper, in which the same authors report their tested construction
+to be unusable above fourth order and unstable at fourth order, and replace it by a
+finite-difference hybrid. This adverse result transfers as a conditioning warning for a
+fixed moment matrix, but not as a proof that every differently selected and scaled
+one-sided interpolation cloud must fail. The present P6/31 selector therefore accepts
+wall clouds only through explicit local hard gates, while global interpolation stability
+remains to be measured. A verification ladder is provided whose rungs reproduce
+published results, so that an implementation
+can be audited against the primary literature at each stage. The literature does not
+supply a universal support construction or a three-dimensional critical stencil ratio.
+Section~\ref{sec:project-stencil} therefore records, separately and explicitly as a
+project design rather than a literature result, the current two-dimensional physical
+$P_6$/31-point stencil selector, including its mandatory candidate sets, rank and
+condition-number gates, and compact-first repair policy. A future fully three-dimensional
+selector remains an open item.
+\end{abstract}
+
+\medskip
+\begin{center}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+Label & Meaning \\
+\midrule
+\cite{KLN2020} & King, Lind \& Nasar, \emph{J.\ Comput.\ Phys.} \textbf{415} (2020)
+109549. \textbf{All section and equation numbers refer to the published version}, a copy
+of which is held in \texttt{docs/literature/}; preprint numbering is not used. \\
+\cite{KL2021} & King \& Lind, \emph{J.\ Comput.\ Phys.} \textbf{449} (2022) 110760.
+Same convention. Note that this paper renumbers the original-ABF definition
+\cite[Eq.~(19)]{KLN2020} as its own Eq.~(8). \\
+\New & Derived in the present report; a proof or an explicit construction is given. \\
+\TBD & \textbf{Open item.} Not established by the literature and not proved here.
+Must be measured. No such item may be used as an implementation assumption. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\tableofcontents
+\newpage
+
+%========================================================================
+\section{Scope and position with respect to the literature}
+
+\subsection{Scope}
+
+The target solver discretises the discrete-velocity Boltzmann equation on a
+body-fitted curvilinear grid and advances it by an interpolation-supplemented
+(semi-Lagrangian) scheme: a collision step evaluated pointwise, followed by transport
+along the exact characteristics of the free-streaming operator, with the distribution
+function at the departure point recovered by interpolation. In the present solver
+that interpolation is a tensor-product seven-point Lagrange interpolation performed in
+\emph{computational} space; because the characteristic is a straight line in physical
+space but not in computational space, the departure point must be obtained by
+numerical integration of the contravariant velocity, which in turn requires the metric
+terms of the mapping and a free-stream preservation constraint on their discretisation.
+
+This report specifies an alternative in which the interpolation is performed directly
+in \emph{physical} space on a node cloud, using operators constructed by LABFM. The
+departure point is then available in closed form, and the metric terms together with
+the characteristic integration are eliminated. The collision model, the forcing scheme,
+the statistics, the checkpointing and the domain decomposition are unchanged.
+
+The concrete selector presently implemented and audited in
+\path{Lagrange_vs_LABFM/2.labfm/} reconstructs in the physical $(y,z)$ plane: it uses
+the two-dimensional degree-six space ($p=27$ nonconstant moments), thirty physical
+neighbours and a structural centre weight. Section~\ref{sec:project-stencil} is the
+normative description of that implementation. Statements below about an 83-dimensional
+three-dimensional basis describe the prospective generalisation, not the current
+P6/31-point code path.
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\textbf{What is \emph{not} eliminated.} An earlier draft of this report also claimed
+that the solver-wide near-wall ghost-layer infrastructure would be removed, on the
+strength of the abstract of~\cite{KLN2020} (``At domain boundaries (with incomplete
+support) LABFM automatically provides one-sided differences of the same order as the
+internal scheme, up to 4th order''). \textbf{That blanket claim is withdrawn.}
+\cite[\S 7.1]{KL2021} instead reports failure or instability for its one-sided
+differential construction and adopts a finite-difference hybrid. The current LABFM
+selector itself reads physical nodes only and clamps its cloud into the domain, but the
+existing ghosts remain required by the wall boundary, incumbent ITB/GILBM paths and
+statistics contract. Local P6/31 solve gates do not establish global wall stability.
+See \S\S\ref{sec:project-stencil}, \ref{sec:boundary} and open item U4.
+}}
+\end{center}
+
+\subsection{Why the operator route is not pursued}
+
+The alternative of discretising $\partial_t f_q + \bm e_q\!\cdot\!\nabla f_q =
+\Omega_q$ directly, using LABFM \emph{differential} operators and an explicit
+Runge--Kutta integrator, is not pursued here, for two reasons. First, it has been
+realised with radial basis function-generated finite differences~\cite{Maidenberg2026}.
+Second, and decisively, the convective operators of LABFM are shown
+in~\cite[\S 4.2]{KLN2020} to possess eigenvalues with strictly positive real part on
+any node distribution carrying disorder, for every fundamental radial basis function
+tested; purely convective problems are therefore unconditionally unstable and require
+hyperviscosity~\cite[Eq.~(25)]{KLN2020}. The same conclusion is reached independently
+in~\cite[Fig.~10]{Broadley2026}. For a wall-resolved simulation of separated
+turbulence, artificial dissipation of the magnitude required would contaminate the
+wall shear stress, which is the primary quantity of interest.
+
+The semi-Lagrangian route avoids this failure mode entirely, because transport is
+effected by translation along exact characteristics rather than by a discrete
+gradient. The relevant stability question becomes that of the interpolation operator,
+which is addressed in \S\ref{sec:vn}.
+
+\subsection{Prior art}
+
+Meshless lattice Boltzmann formulations date from~\cite{Musavi2015}. Semi-Lagrangian
+streaming with local radial basis function interpolation was introduced
+in~\cite{LinWuZhang2019}, and with moving least squares reconstruction
+in~\cite{WangYang2025}. The convergence behaviour of the meshless lattice Boltzmann
+method has been characterised in~\cite{Strzelczyk2023,Strzelczyk2024}, where a
+saturation law is established: the error of the meshless scheme at a given streaming
+distance is bounded below by the error of the standard lattice Boltzmann method at
+that same streaming distance, so that node refinement ceases to reduce the error once
+the interpolation contribution falls below that floor. Separately, high-order
+semi-Lagrangian kinetic schemes on body-fitted element meshes have been advanced to
+three-dimensional wall-bounded turbulence~\cite{Kramer2017,Wilde2020,Wilde2021,%
+Spelten2024}, and interpolation-based lattice Boltzmann methods have been applied to
+direct numerical simulation of turbulent channel and duct flows~\cite{Jin2025}.
+
+Against this background, the contribution specified here is narrow and is stated
+precisely: (i) LABFM has not previously been coupled to a kinetic scheme; (ii) LABFM
+has been formulated only for differential operators, and its extension to off-node
+interpolation is given in \S\ref{sec:interp} of this report; and (iii) the polynomial
+consistency \emph{realised} here exceeds that reported for any existing meshless
+lattice Boltzmann formulation, in three dimensions and for wall-resolved separated
+turbulence. Item~(iii) is deliberately a statement about realisation and not about
+capability: Theorem~\ref{thm:mls} establishes that the same consistency order is
+attainable by moving least squares, so high order on a node cloud is not specific to
+LABFM. Claims of novelty beyond these three are not supported by the literature survey
+and are not made.
+
+%========================================================================
+\section{Notation}
+
+The domain is discretised by a node cloud. Node $i$ is at $\bm r_i$; the difference of
+any quantity between nodes is written $(\cdot)_{ji}=(\cdot)_j-(\cdot)_i$ and
+$\rji=\bm r_j-\bm r_i$. Following~\cite{KL2021}, $s_i$ denotes the mean node spacing
+in the neighbourhood of node $i$ and $h_i$ the stencil length scale; the support radius
+is $2h_i$ throughout~\cite[\S 2]{KLN2020}, so that the computational stencil is
+$\mathcal N_i=\{\,j : |\rji|\le 2h_i\,\}$ with cardinality $N_i$. The order of
+polynomial reproduction is $m$ (denoted $k$ in~\cite{KLN2020} and $m$
+in~\cite{KL2021}; the latter convention is used here). The number of spatial
+dimensions is $\mu$. Lattice quantities follow the usual D3Q19 convention, with
+$\bm e_q$, $q=0,\dots,18$, the discrete velocities and $\Delta t$ the global time step.
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\textbf{Convention: ``order'' is not used as a primary index.} The word is read
+differently in the two settings this report has to bridge, and the difference is exactly
+one. For a \emph{derivative} operator, reproduction of $\mathbb P_m$ gives $m$-th order
+accuracy, and \cite{KLN2020,KL2021} accordingly write ``$m$-th order'' for degree $m$;
+their statement that one-sided LABFM is unstable ``at fourth order'' means at $m=4$. For
+an \emph{interpolation} operator, reproduction of $\mathbb P_m$ gives truncation
+$O(h^{m+1})$, so the same degree is conventionally called $(m{+}1)$-th order. A
+seven-point one-dimensional Lagrange interpolant is therefore ``degree six'' under the
+first reading and ``seventh order'' under the second, and both descriptions are correct.
+
+\smallskip
+\noindent To remove the ambiguity, \textbf{every statement in this report is indexed by
+the polynomial degree $m$, with the truncation exponent written explicitly where it
+matters}. Ordinal words are used only when quoting a source, and are then tied to
+the degree. The incumbent scheme of the target solver is a seven-point tensor Lagrange
+interpolant, i.e.\ $m=6$, truncation $O(h^{7})$.
+}}
+\end{center}
+
+\noindent The basis dimension follows from $m$ and $\mu$ alone. For interpolation in the
+streamwise--wall-normal plane the relevant counts are
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}cccccX@{}}
+\toprule
+\textbf{1-D points} & \textbf{degree $m$} & \textbf{truncation} &
+$\dim\mathbb P_m^{2\rm D}$ & \textbf{in-plane neighbours $p_2$} &
+\textbf{tensor in-plane points}\\
+\midrule
+5 & 4 & $O(h^{5})$ & 15 & 14 & $25$\\
+6 & 5 & $O(h^{6})$ & 21 & 20 & $36$\\
+\textbf{7 (incumbent)} & \textbf{6} & $O(h^{7})$ & \textbf{28} & \textbf{27} &
+$\bm{49}$\\
+8 & 7 & $O(h^{8})$ & 36 & 35 & $64$\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\noindent $p_2=\dim\mathbb P_m^{2\rm D}-1$, the constant being carried structurally by
+the increment form and not by a neighbour.
+
+%========================================================================
+\section{The local anisotropic basis function method}
+\label{sec:labfm}
+
+This section is a review. Every equation carries an explicit citation to its source;
+Appendix~\ref{app:prov} collects the correspondence in tabular form.
+
+\subsection{Discrete operators and the moment system}
+
+Define the vector of monomials and the vector of partial derivative operators
+\cite[Eqs.~(1),(2)]{KLN2020}, \cite[Eqs.~(1),(2)]{KL2021}
+\begin{align}
+\bm X_{ji}&=\Bigl[x_{ji},\ y_{ji},\ \tfrac{x_{ji}^{2}}{2},\ x_{ji}y_{ji},\
+\tfrac{y_{ji}^{2}}{2},\ \tfrac{x_{ji}^{3}}{6},\ \dots,\ \tfrac{y_{ji}^{m}}{m!}
+\Bigr]^{\mathsf T},
+\label{eq:X}\\[0.2em]
+\bm D(\cdot)&=\bigl[\partial_x,\ \partial_y,\ \partial_{xx},\ \partial_{xy},\
+\partial_{yy},\ \partial_{xxx},\ \dots,\ \partial_{y^m}\bigr]^{\mathsf T}(\cdot).
+\label{eq:D}
+\end{align}
+It is emphasised, as in~\cite{KLN2020}, that $\bm X_{ji}\neq\bm X_j-\bm X_i$: the
+entries of $\bm X_{ji}$ are monomials in the separation vector $\rji$. With this
+convention the multidimensional Taylor expansion takes the compact form
+\cite[Eq.~(3)]{KLN2020}
+\begin{equation}
+(\cdot)_j=(\cdot)_i+\bm X_{ji}\cdot\bm D(\cdot)\big|_i .
+\label{eq:taylor}
+\end{equation}
+
+A general discrete operator is written \cite[Eq.~(4)]{KLN2020},
+\cite[Eq.~(3)]{KL2021}
+\begin{equation}
+\mathcal L^{d}_i(\cdot)=\sum_{j\in\mathcal N_i}(\cdot)_{ji}\,w^{d}_{ji}
+\ \approx\ \bm C^{d}\cdot\bm D(\cdot)\big|_i ,
+\label{eq:Lop}
+\end{equation}
+in which $\bm C^{d}$ selects the derivative combination to be approximated
+\cite[Eq.~(5)]{KLN2020}, \cite[Eq.~(4)]{KL2021}; for the gradient components and the
+Laplacian, $\bm C^{x}=[1,0,0,\dots]^{\mathsf T}$, $\bm C^{y}=[0,1,0,\dots]^{\mathsf T}$
+and $\bm C^{L}=[0,0,1,0,1,0,\dots]^{\mathsf T}$.
+
+The weights are expanded in a set of anisotropic basis functions (ABFs)
+$\bm W_{ji}=\bm W(\rji/h_i)$ \cite[Eq.~(10)]{KLN2020}, \cite[Eq.~(5)]{KL2021},
+\begin{equation}
+w^{d}_{ji}=\bm W_{ji}\cdot\bm\Psi^{d}_i ,
+\label{eq:wPsi}
+\end{equation}
+which upon substitution into the moment vector $\bm B^d_i=\sum_j\bm X_{ji}w^d_{ji}$
+\cite[Eq.~(8)]{KLN2020} yields the local linear system
+\cite[Eqs.~(13),(14)]{KLN2020}, \cite[Eqs.~(6),(7)]{KL2021}
+\begin{equation}
+\bm M_i=\sum_{j\in\mathcal N_i}\bm X_{ji}\otimes\bm W_{ji},
+\qquad
+\bm M_i\,\bm\Psi^{d}_i=\bm C^{d}.
+\label{eq:moments}
+\end{equation}
+
+\begin{remark}[Operator independence of the moment matrix]
+\label{rem:shared}
+The matrix $\bm M_i$ does not depend on $d$. This is stated explicitly
+in~\cite[\S 3.1]{KLN2020}: ``The matrix $M_i$ is the same for all operators
+(different $d$), and so we calculate each $M_i$ once, then solve (14) for each $d$ to
+obtain the required operators.'' The construction of \S\ref{sec:interp} rests entirely
+on this property: it replaces $\bm C^d$ by a family of right-hand sides indexed by the
+discrete velocity, so that one factorisation per node serves all streaming directions
+as well as every post-processing differential operator.
+\end{remark}
+
+\begin{remark}[Distributional reading: what $\bm C$ is; \New]
+\label{rem:distribution}
+Associate with the weights the discrete measure
+\begin{equation}
+\mu^{d}_i\;\equiv\;\sum_{j\in\mathcal N_i}w^{d}_{ji}
+\bigl(\delta_{\bm r_j}-\delta_{\bm r_i}\bigr),
+\qquad\text{so that}\qquad
+\bigl\langle\mu^{d}_i,\phi\bigr\rangle=\mathcal L^{d}_i(\phi).
+\label{eq:measure}
+\end{equation}
+The moment conditions \eqref{eq:moments} then read: \emph{$\mu^d_i$ agrees with a
+prescribed target distribution when paired with every element of the test space
+$\mathbb P_m$}, and $\bm C^d$ is precisely the vector of moments of that target,
+$C^{d,\beta}=\langle\text{target},X^\beta\rangle$. Explicitly,
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Target distribution & Resulting $\bm C$ \\
+\midrule
+$-\partial_x\delta_{\bm r_i}$ & $\bm C^{x}=[1,0,0,\dots]^{\mathsf T}$ \\
+$\nabla^{2}\delta_{\bm r_i}$ & $\bm C^{L}=[0,0,1,0,1,0,\dots]^{\mathsf T}$ \\
+$\delta_{\bm r_i+\bm\delta_q}-\delta_{\bm r_i}$ & $\bm C^{q}=\bm X(\bm\delta_q)$
+\quad(\S\ref{sec:interp}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+The last line follows from
+$\langle\delta_{\bm r_i+\bm\delta_q}-\delta_{\bm r_i},X^\beta(\cdot-\bm r_i)\rangle
+=X^\beta(\bm\delta_q)-X^\beta(\bm 0)=X^\beta(\bm\delta_q)$, and incidentally explains
+why $\bm X$ carries no constant term: the difference form annihilates constants on both
+sides. This reading unifies the operators of~\cite{KLN2020,KL2021} with the one
+introduced in \S\ref{sec:interp} --- they differ only in the target distribution.
+\end{remark}
+
+\subsection{Order of accuracy and basis dimension}
+
+When \eqref{eq:moments} is solved with $\bm M_i$ of size $p\times p$, exact
+reproduction of polynomials of total degree $m$ is enforced and the leading truncation
+error of $\mathcal L^d_i$ is $O\!\left(h_i^{\,m+1-l}\right)$, where $l$ is the order of
+the derivative approximated \cite[\S 3.1]{KLN2020}, \cite[\S 2]{KL2021}.
+Accordingly the gradient converges at order $m$, the Laplacian at order $m-1$, and
+--- of direct relevance here --- an operator with $l=0$, that is an interpolation,
+converges at order $m+1$.
+
+The basis dimension is \cite[Eqs.~(15),(16)]{KLN2020}
+\begin{equation}
+p_{\mathrm{2D}}=\frac{m^{2}+3m}{2},
+\qquad
+p_{\mathrm{3D}}=\sum_{q=2}^{m+1}\frac{q(q+1)}{2}=\binom{m+3}{3}-1 .
+\label{eq:p}
+\end{equation}
+
+\begin{center}
+\begin{tabular}{lrrrrrr}
+\toprule
+$m$ & 2 & 4 & 5 & 6 & 8 & 10\\
+\midrule
+$p_{\mathrm{2D}}$ & 5 & 14 & 20 & 27 & 44 & 65\\
+$p_{\mathrm{3D}}$ & 9 & 34 & 55 & \textbf{83} & 164 & 285\\
+interpolation order $m+1$ & 3 & 5 & 6 & \textbf{7} & 9 & 11\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The three-dimensional values reproduce the sequence $3,9,19,34,55$ quoted
+in \cite[Eq.~(16)]{KLN2020} for $m=1,\dots,5$. The polynomial design point is
+$m=6$ (truncation $O(h^{7})$), matching the degree of the seven-point Lagrange
+interpolation it replaces. The current in-plane implementation has
+$p_{\mathrm{2D}}=27$ and is specified in \S\ref{sec:project-stencil}; a genuinely
+three-dimensional implementation would instead have $p_{\mathrm{3D}}=83$ and is not
+specified by the present source files.
+
+\subsection{Structure of the weight system: what the basis functions decide}
+\label{sec:structure}
+
+The material of this subsection is not stated in this form in~\cite{KLN2020,KL2021},
+but it is the shortest route to understanding both the role of the ABFs and the
+relationship to the control formulation of \S\ref{sec:mls}. \New
+
+Collect the stencil data into matrices: let $\bm X\in\mathbb R^{N_i\times p}$ have rows
+$\widetilde{\bm X}_{ji}^{\mathsf T}$ and $\bm W\in\mathbb R^{N_i\times p}$ have rows
+$\bm W_{ji}^{\mathsf T}$, and let $\bm w\in\mathbb R^{N_i}$ collect the weights. The
+moment conditions \eqref{eq:moments} are
+\begin{equation}
+\bm X^{\mathsf T}\bm w=\bm C
+\qquad\text{---\ $p$ equations in $N_i$ unknowns.}
+\label{eq:underdet}
+\end{equation}
+For $N_i>p$ this system is underdetermined: its solution set is an affine subspace of
+dimension $N_i-p$, and \emph{every member reproduces $\mathbb P_m$ exactly}. A
+selection rule is therefore mandatory. The ABF ansatz \eqref{eq:wPsi} supplies one by
+restricting $\bm w$ to the column space of $\bm W$, which renders the system square,
+and $\bm M_i=\bm X^{\mathsf T}\bm W$ is exactly that restriction. Writing the rule with
+a general \emph{selector} $\bm S\in\mathbb R^{N_i\times p}$,
+\begin{equation}
+\boxed{\ \bm w=\bm S\bigl(\bm X^{\mathsf T}\bm S\bigr)^{-1}\bm C\ }
+\qquad
+\begin{cases}
+\bm S=\bm W & \text{LABFM},\\[0.15em]
+\bm S=\bm\Theta\bm Q & \text{generalised moving least squares (\S\ref{sec:mls})}.
+\end{cases}
+\label{eq:selector}
+\end{equation}
+
+\begin{proposition}[Degenerate limit $N_i=p$; \New]
+\label{prop:degenerate}
+If $N_i=p$ and both $\bm X$ and $\bm S$ are invertible, then
+$\bm w=\bm X^{-\mathsf T}\bm C$, independent of $\bm S$. The weights are then those of
+plain polynomial interpolation of degree $m$; in one dimension with $m$ neighbours plus
+the centre they are the Lagrange weights on $m+1$ points.
+\end{proposition}
+\begin{proof}
+$\bm w=\bm S(\bm X^{\mathsf T}\bm S)^{-1}\bm C=\bm S\bm S^{-1}\bm X^{-\mathsf T}\bm C
+=\bm X^{-\mathsf T}\bm C$. Uniqueness of the solution of the square system
+\eqref{eq:underdet} identifies it with the unique degree-$m$ polynomial reproduction
+rule on those $N_i+1$ points.
+\end{proof}
+
+\begin{remark}[What the surplus degrees of freedom buy]
+\label{rem:surplus}
+Proposition~\ref{prop:degenerate} shows that at $N_i=p$ the basis functions are
+irrelevant: they cancel. They begin to act only for $N_i>p$, and by
+\eqref{eq:underdet} every admissible choice has \emph{identical} polynomial
+consistency. The surplus $N_i-p$ degrees of freedom therefore cannot change the order of accuracy;
+what they do change is the coefficient of the leading error term, together with the
+conditioning and stability of the resulting operator (Appendix~\ref{app:tutorial}
+exhibits both statements explicitly). This is consistent with the requirement
+$N_{\rm crit}>N_{\rm poly}$ reported in \cite[\S 3.2]{KLN2020} --- for instance $37$
+against $28$ at $m=6$ in two dimensions --- and it is the precise sense in which LABFM
+and moving least squares differ: same constraint set, different selector.
+\end{remark}
+
+\begin{proposition}[The expansion origin is a gauge; \New]
+\label{prop:gauge}
+The constraint \eqref{eq:underdet} is invariant under a change of the point about which
+the monomials $\bm X$ and the right-hand side $\bm C$ are formed. Consequently, with
+$\bm S$ and $\mathcal N_i$ held fixed, the weights $\bm w$ do not depend on that choice.
+\end{proposition}
+\begin{proof}
+The constraint is equivalent to the origin-free statement ``$\sum_j w_{ji}(P_j-P_i)=
+\langle\text{target},P\rangle$ for all $P\in\mathbb P_m$''. Monomials about any point
+form a basis of $\mathbb P_m$ (the constant contributing the trivial identity $0=0$ in
+the difference form), so different choices produce different but equivalent bases for
+the same $p$ conditions, hence the same solution set; intersecting with the fixed
+subspace $\operatorname{span}(\bm S)$ gives the same $\bm w$.
+\end{proof}
+
+\begin{remark}[Three distinct ``origins'', only one of which is free]
+\label{rem:origins}
+Formulae in~\cite{KLN2020} place three things at $\bm r_i$, and they are commonly
+conflated: (i) the monomial/Taylor origin, which is a gauge by
+Proposition~\ref{prop:gauge}; (ii) the ABF argument origin, which is \emph{not} a gauge,
+since it defines $\operatorname{span}(\bm S)$ and hence which admissible solution is
+selected, together with $\kappa$, $\Lambda$ and $|G_q|$; and (iii) the stencil centre,
+which is not a gauge either, since it determines $\mathcal N_i$. Gauge freedom in (i) is
+nevertheless not licence: with the origin far from the stencil the entries of $\bm X$
+span many orders of magnitude and $\bm M_i$ becomes numerically intractable although
+formally equivalent. Choosing $\bm r_i$, together with the scaling of
+\S\ref{sec:affine}, is the well-conditioned gauge. Proposition~\ref{prop:gauge} is used
+as a verification test in rung L5f of \S\ref{sec:ladder}. The alternative of centring
+(ii) and (iii) on the departure point is a genuine method variant, adopted for example
+in the meshless lattice Boltzmann scheme of~\cite{Strzelczyk2023}; it costs one moment
+matrix per discrete velocity.
+\end{remark}
+
+\subsection{Construction of the anisotropic basis functions}
+\label{sec:abf}
+
+Two constructions appear in the literature.
+
+\paragraph{Original ABFs.} In~\cite{KLN2020} the ABFs are generated as partial
+derivatives of a fundamental radial basis function $W^{0}$,
+\begin{equation}
+\bm W_{ji}=\bm D\,W^{0}(\rji),
+\label{eq:origABF}
+\end{equation}
+\cite[Eq.~(19)]{KLN2020}, with four choices of $W^{0}$ examined (conic, quadratic,
+Wendland C6, Gaussian; explicit forms in \cite[Appendix A]{KLN2020}). The fundamental
+functions are normalised so that $W^{0}(2)=0$ (Gaussian excepted) and
+$2\pi\int_0^{2}qW^{0}(q)\,\mathrm dq=1$ \cite[Eq.~(A.1)]{KLN2020}; the convex quadratic
+is $W_Q(q)=\tfrac{3}{16\pi}(q-2)^2$ on $0\le q\le2$ \cite[Eq.~(A.3)]{KLN2020}, designed
+so that $\mathrm dW_Q/\mathrm dq|_{q=2}=0$, which~\cite{KLN2020} identifies as apparently
+necessary for stability of the convective operator on a uniform distribution.
+
+\begin{remark}[Implementation caveat required to reproduce~\cite{KLN2020}; \New]
+\label{rem:truncation}
+The full expansion \cite[Eq.~(A.2)]{KLN2020} of $\bm D W^{0}$ contains terms in
+$\mathrm d^2W^{0}/\mathrm dr^2$ and higher radial derivatives, which vanish only for the
+conic $W^{0}$. \cite[Appendix A]{KLN2020} states that in practice these terms are
+\emph{omitted} for all $m\ge4$ (that is, from the tenth element of $\bm W_{ji}$ onward)
+\emph{regardless of whether they vanish}, for two stated reasons: computational
+simplicity, and greater resilience to node-distribution disorder. Any attempt to
+reproduce the published two-dimensional convergence and critical-ratio results ---
+rungs L1 and L2 of \S\ref{sec:ladder} --- must apply the same truncation, or the
+numbers will not match. This caveat does not affect the Hermite construction, which is
+what the production path uses.
+\end{remark}
+
+\paragraph{Hermite ABFs.} In~\cite{KL2021} the ABFs are instead built from an
+orthogonal polynomial basis. Index the basis by the multi-index
+$\alpha$ of the corresponding monomial: if the $\alpha$-th entry of $\bm X_{ji}$ is
+proportional to $x_{ji}^{a}y_{ji}^{b}$, then \cite[Eqs.~(10),(11)]{KL2021}
+\begin{equation}
+W^{\alpha}_{ji}=\frac{\psi\!\left(|\rji|/h_i\right)}{\sqrt{2^{\,a+b}}}\,
+H_a\!\left(\frac{x_{ji}}{h_i\sqrt2}\right)
+H_b\!\left(\frac{y_{ji}}{h_i\sqrt2}\right),
+\label{eq:hermiteABF}
+\end{equation}
+where $H_a$ is the physicists' Hermite polynomial of degree $a$ and $\psi$ is a radial
+basis function (Wendland C2 by default; \cite{KL2021} states that other choices,
+including $\psi\equiv1$, are admissible).
+
+\begin{remark}[The roles of the two subscripts, and the shape of $\bm W$]
+\label{rem:indices}
+$W^{\alpha}_{ji}$ carries three indices: $\alpha$ selects the basis function, $j$ the
+neighbour at which it is evaluated, and $i$ the centre. The object
+$\bm W_{ji}=[W^{1}_{ji},\dots,W^{p}_{ji}]^{\mathsf T}$ appearing in \eqref{eq:wPsi} is
+therefore, for one \emph{fixed} neighbour, the vector of \emph{all $p$} basis functions
+evaluated at the single separation $\rji$. Every neighbour carries every basis function;
+the basis is not distributed among the neighbours.
+
+Two consequences are worth stating, because the alternative reading is a common one.
+First, dimensionally: only if $\bm W_{ji}$ is a $p$-vector is
+$\bm X_{ji}\otimes\bm W_{ji}$ a $p\times p$ matrix and $\bm M_i$ a square system; were
+each neighbour to carry a single basis function, the sum in \eqref{eq:moments} would
+return a vector and the construction would not close. Equivalently, in the notation of
+\S\ref{sec:structure}, $\bm W$ is an $N_i\times p$ matrix with neighbours indexing rows
+and basis functions indexing columns --- the same shape as $\bm X$, and the same shape as
+a design matrix in least squares.
+
+Second, by contrast: radial basis function methods \emph{do} index the basis by node,
+placing one function centred at each neighbour, which yields an $N_i\times N_i$ system
+whose size grows with the stencil. In LABFM the basis is indexed by differential order
+instead, so enlarging the stencil adds equations to an overdetermined set rather than
+unknowns, and the local system remains $p\times p$ whatever $N_i$ is. This is the origin
+of the $O(p^{3})$ rather than $O(N_i^{3})$ factorisation cost, and of the surplus
+degrees of freedom discussed in Remark~\ref{rem:surplus}.
+\end{remark}
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\textbf{Decisive result for the three-dimensional case.} \cite[\S 3]{KL2021} reports:
+``An example of where this results in the method breaking down is when LABFM is
+extended to three-dimensions, with $m=4$. Here $M$ has size $n=34$, and rank $n-1=33$,
+\emph{regardless of the node distribution}.''
+
+\smallskip
+The original ABFs \eqref{eq:origABF} therefore render $\bm M$ rank deficient in three
+dimensions for $m\ge4$, independently of the node cloud. The present application is
+three-dimensional with target $m=6$; the Hermite construction \eqref{eq:hermiteABF} is
+consequently \emph{mandatory}. The original construction retains value only as a
+two-dimensional regression target (rungs L1--L2 of \S\ref{sec:ladder}) and as the
+subject of the negative test L3, and must not appear on any three-dimensional
+production path.
+}}
+\end{center}
+
+\subsection{Row preconditioning}
+
+Define the vector of inverse powers of $h_i$ \cite[Eq.~(9)]{KL2021}
+\begin{equation}
+\bm H_i=\bigl[h_i^{-1},h_i^{-1},h_i^{-2},h_i^{-2},h_i^{-2},h_i^{-3},\dots,
+h_i^{-m}\bigr]^{\mathsf T},
+\qquad
+\widetilde{\bm X}_{ji}=\bm X_{ji}\!\cdot\!\bm H_i,
+\quad
+\widetilde{\bm C}^{d}=\bm C^{d}\!\cdot\!\bm H_i,
+\label{eq:precond}
+\end{equation}
+the products being taken entrywise. Solving \eqref{eq:moments} with
+$\widetilde{\bm X}$ and $\widetilde{\bm C}$ in place of $\bm X$ and $\bm C$ leaves the
+exact solution unchanged while improving the condition number of $\bm M$ by several
+orders of magnitude~\cite[\S 2]{KL2021}. This preconditioning is applied
+unconditionally in the present specification.
+
+\subsection{Sampling requirements and stencil sizing}
+\label{sec:sampling}
+
+The construction requires that the discrete sums forming $\bm M_i$ approximate the
+corresponding continuous integrals~\cite[Eq.~(22)]{KLN2020}. This imposes a lower bound
+on $h/s$, made precise in~\cite[\S 3.2]{KLN2020} by an angular sampling argument:
+expressed in local polar coordinates, the order-$m$ ABFs contain terms in $\cos m\theta$
+and $\sin m\theta$, so that if the support is divided into $2m$ equal angular sectors,
+each sector must contain at least one node. Below the resulting critical ratio, some
+eigenvalues of $\bm M_i$ fall to machine-precision zero and the condition number
+increases by roughly ten orders of magnitude~\cite[\S 3.2]{KLN2020}.
+
+\begin{remark}[Normalisation of the sampling condition; \New]
+\label{rem:innerprod}
+The inner product of \cite[Eq.~(18)]{KLN2020} is a \emph{mean} over the support,
+$\langle f,g\rangle=V_i^{-1}\int_{V_i}fg\,\mathrm dV_j$, so that
+\cite[Eq.~(22)]{KLN2020} as printed, $\sum_j X^{a}_{ji}W^{b}_{ji}\approx\langle
+X^{a},W^{b}\rangle$, is short of a factor $N_i$. With node number density $s^{-\mu}$ the
+operative relation is
+\begin{equation}
+\sum_{j\in\mathcal N_i}X^{a}_{ji}W^{b}_{ji}
+\;\approx\;\frac{1}{s_i^{\mu}}\int_{V_i}X^{a}W^{b}\,\mathrm dV
+\;=\;N_i\bigl\langle X^{a},W^{b}\bigr\rangle .
+\label{eq:sampling-norm}
+\end{equation}
+The distinction is immaterial to the argument of~\cite{KLN2020} but must be respected
+when a continuum reference matrix is computed as a diagnostic (\S\ref{sec:parity}).
+\end{remark}
+
+\paragraph{Published two-dimensional values.} These belong to \emph{two different}
+ABF constructions and must not be conflated:
+\begin{center}
+\begin{tabular}{llrrrrr}
+\toprule
+Quantity & ABF used & $m{=}2$ & 4 & 6 & 8 & 10\\
+\midrule
+$(h/s)_{\rm crit}$, \emph{critical} \cite[\S 3.2]{KLN2020} & original & 0.75 & 1.15
+& 1.60 & 2.10 & ---\\
+$N_{\rm crit}$ \cite[\S 3.2]{KLN2020} & original & 8 & 21 & 37 & 57 & ---\\
+$N_{\rm poly}=p_{\rm 2D}+1$ & --- & 6 & 15 & 28 & 45 & 66\\
+$h/s$, \emph{recommended} \cite[\S 5]{KL2021} & \textbf{Hermite} & 1.2 & 1.4
+& \textbf{1.8} & 2.3 & 2.8\\
+\bottomrule
+\end{tabular}
+\end{center}
+\noindent The stencil optimisation of~\cite[\S 4]{KL2021} reduces the mean ratio for
+$m=6$ from $2.2$ to approximately $1.5$, lowering the neighbour count by $17.5\,\%$.
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\TBD\ \textbf{Open item U8.} No \emph{critical} ratio is published for the Hermite
+ABFs, in any dimension. The critical values above were measured with the original
+ABFs, which the production path does not use; the Hermite values quoted
+by~\cite{KL2021} are recommended operating points carrying an unquantified margin.
+Code must therefore not name the original-ABF critical values as if they applied to the
+production construction.
+}}
+\end{center}
+
+The neighbour count follows from the support geometry. In two dimensions
+$N_i\approx4\pi(h_i/s_i)^{2}$~\cite[\S 2]{KL2021}; the same argument in three
+dimensions gives \New
+\begin{equation}
+N_i^{\rm 3D}\approx\frac{4}{3}\pi\frac{(2h_i)^{3}}{s_i^{3}}
+=\frac{32\pi}{3}\left(\frac{h_i}{s_i}\right)^{3}
+\approx33.51\left(\frac{h_i}{s_i}\right)^{3}.
+\label{eq:N3D}
+\end{equation}
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\TBD\ \textbf{Open item U1.} The critical ratio $(h/s)^{\rm 3D}_{\rm crit}$ is not
+available. The values tabulated above are two-dimensional. The three-dimensional
+sampling condition is a solid-angle rather than a plane-angle condition and is
+necessarily more demanding, but by how much is not established;~\cite{KL2021} states
+explicitly that three-dimensional simulations were reserved for a later study. Because
+$N_i$ scales as $(h/s)^{3}$, this single unknown controls any cost model built on
+the neighbour count.
+}}
+\end{center}
+
+\subsection{Current project-specific \texorpdfstring{$P_6$/31-point}{P6/31-point}
+stencil selector}
+\label{sec:project-stencil}
+
+This subsection is an implementation specification, not a rule taken from
+\cite{KLN2020,KL2021}. Its normative sources are
+\path{Lagrange_vs_LABFM/2.labfm/labfm_stencil.h} and
+\path{Lagrange_vs_LABFM/2.labfm/labfm_solve.h}, read through the active call chain
+\texttt{b\_weights\_case2} $\rightarrow$
+\texttt{labfm\_select\_physical\_stencil} $\rightarrow$
+\texttt{labfm\_candidate\_pool\_build}. The separately named
+\texttt{labfm\_select\_physical\_stencil\_legacy\_rrqr} has no caller in this path and
+is retained only for validation; it does not define the current selector. The Taylor,
+Hermite and Wendland functions called by this path are defined in
+\path{Lagrange_vs_LABFM/2.labfm/labfm_hermite.h}.
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\textbf{Project rule (a posteriori certificate, not an a priori topology theorem).}
+The following five stages map one-to-one to
+\S\S\ref{sec:project-point-sets}--\ref{sec:project-final-solve}:
+\begin{enumerate}[label=\arabic*.,leftmargin=2.0em]
+\item \textbf{Point sets.} Construct a deterministic physical-node candidate pool and
+      distinguish points protected in that pool from points selected in the final
+      31-point footprint.
+\item \textbf{Compact tier.} First try the fixed seven-layer index-space pyramid. Its
+      actual physical shape may be warped, and the template is not assumed to be
+      nonsingular before it is tested.
+\item \textbf{Admissibility certificate.} Assemble the matrices from the actual physical
+      coordinates. Accept a trial only when its support, numerical rank, reciprocal
+      conditioning and direction-independent weight-amplification gates all pass.
+\item \textbf{Repair tier.} Only if every compact-tier trial fails, generate replacement
+      clouds, apply the same admissibility certificate, and compare the surviving clouds
+      by a degree-seven error proxy.
+\item \textbf{Final solve and export.} For each lattice direction, solve for its weights
+      and pass independent solver and backward-error checks. Failed data are never
+      exported to the time-step path.
+\end{enumerate}
+Thus geometry proposes a stencil, algebra certifies it, and only a certified stencil may
+be used. Conditioning is an acceptance gate, not the optimisation objective.
+}}
+\end{center}
+
+\subsubsection{From grid indices to three point sets}
+\label{sec:project-point-sets}
+
+\paragraph{Purpose of this stage.}
+This stage answers three different questions: which physical nodes are enumerated,
+which of them are guaranteed a place in the finite candidate pool, and which 30
+neighbours finally accompany the centre. These three sets must not be conflated.
+
+\paragraph{Geometric notation.}
+The code stores three ghost layers around the physical array. Let $(j,k)$ be the stored
+array indices of the arrival node at which a stencil is being built. Its physical-grid
+indices are
+\begin{equation}
+ c_j=j-3,\qquad c_k=k-3.
+\label{eq:project-centre-index}
+\end{equation}
+Here $N_y$ and $N_z$ are, symmetrically, the numbers of distinct physical-grid nodes in
+the streamwise and wall-normal directions. Their canonical physical indices are
+$0,\ldots,N_y-1$ and $0,\ldots,N_z-1$, respectively. The streamwise coordinate file
+contains one additional record at index $N_y$ that repeats index zero at the other end
+of the period. After retaining this repeated endpoint and adding three ghosts on each
+side, the stored extents are
+\begin{equation}
+ N_{y6}=(N_y+1)+6=N_y+7,\qquad N_{z6}=N_z+6.
+\label{eq:project-stored-extents}
+\end{equation}
+Thus the implementation variables satisfy
+$\texttt{NI}=N_y+1$ (the solver macro \texttt{NY} has the same convention),
+$\texttt{NJ}=N_z$,
+$\texttt{NY6}=N_{y6}$, and $\texttt{NZ6}=N_{z6}$; $N_{z6}$ is the stored
+wall-normal stride.
+
+For one enumerated candidate, the following symbols are used:
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}P{2.6cm}X@{}}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} \\
+\midrule
+$d_j,d_k$ & Integer offsets from $(c_j,c_k)$ in structured index space. They determine
+the candidate through $c_j+d_j=j_p+\sigma_p N_y$ and $k_p=c_k+d_k$; $d_j$ is kept
+unwrapped so that its periodic image remains known. \\
+$j_p,k_p$ & Canonical physical-grid indices of the candidate, with
+$0\le j_p<N_y$ and $0\le k_p<N_z$. \\
+$\iota_p$ & Canonical physical-node label, stored as \texttt{physical\_id}; it uniquely
+identifies $(j_p,k_p)$ but does not distinguish its periodic images. \\
+$\sigma_p$ & Integer periodic-image number, stored as \texttt{image\_shift} and uniquely
+defined by $c_j+d_j=j_p+\sigma_p N_y$. It identifies which periodic image gives a continuous
+streamwise displacement. \\
+$L_y$ & Physical streamwise period, stored as \texttt{period\_y}. \\
+$Y,Z$ & Physical-coordinate arrays; $Y(j_p,k_p)$ and $Z(j_p,k_p)$ are their values at
+the canonical physical node. \\
+$\Delta Y_p,\Delta Z_p$ & Physical-coordinate displacement from the arrival node to the
+chosen periodic image of the candidate. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+If $(Y_0,Z_0)$ denotes the physical coordinate of the arrival node, then
+\begin{equation}
+ \Delta Y_p=Y(j_p,k_p)+\sigma_pL_y-Y_0,\qquad
+ \Delta Z_p=Z(j_p,k_p)-Z_0.
+\label{eq:project-physical-displacement}
+\end{equation}
+The canonical physical-node label used for de-duplication is
+\begin{equation}
+ \iota_p=j_pN_z+k_p,\qquad 0\le\iota_p<N_y N_z.
+\label{eq:project-physical-id}
+\end{equation}
+The code stores $\iota_p$ in \texttt{physical\_id}. It is not the same as the flattened
+storage address $\mathrm{storage\_id}=(j_p+3)N_{z6}+(k_p+3)$, where $N_{z6}$ is the
+stored wall-normal stride including ghosts. Two periodic images can have the same
+$\iota_p$ and canonical storage address but different values of $\sigma_p$, and hence
+different continuous coordinates in \eqref{eq:project-physical-displacement}.
+
+\paragraph{Set 1: all enumerated physical candidates.}
+The search is written symmetrically in terms of the two integer offsets:
+\begin{equation}
+ -16\le d_j\le16,\qquad
+ \max(-16,-c_k)\le d_k\le\min(16,N_z-1-c_k).
+\label{eq:enum-set}
+\end{equation}
+For every pair $(d_j,d_k)$, the canonical physical indices are obtained from
+$c_j+d_j=j_p+\sigma_p N_y$ and $k_p=c_k+d_k$. The first relation wraps the periodic
+streamwise index while retaining its image shift; the bounds on $d_k$ ensure directly
+that $0\le k_p<N_z$, so no wall ghost can enter the set. The centre
+$(d_j,d_k)=(0,0)$ is skipped. Away from both walls the set therefore contains
+$33\mathbin{\times}33-1=1088$ candidates; wall clipping reduces this number. The value
+16 is a finite structured-index search budget; it is not the Wendland support radius
+and is not a physical-distance cutoff.
+
+To order the candidates, the code first estimates the two local physical spacings
+\begin{equation}
+\begin{aligned}
+ s_y&=\tfrac12\bigl(|Y^{\rm st}_{j+1,k}-Y^{\rm st}_{j,k}|
+                   +|Y^{\rm st}_{j,k}-Y^{\rm st}_{j-1,k}|\bigr),\\
+ s_z&=\tfrac12\bigl(|Z^{\rm st}_{j,k+1}-Z^{\rm st}_{j,k}|
+                   +|Z^{\rm st}_{j,k}-Z^{\rm st}_{j,k-1}|\bigr).
+\end{aligned}
+\label{eq:project-local-spacing}
+\end{equation}
+The superscript $\rm st$ indicates that these four differences use stored-array indices;
+the three ghost layers make all four accesses valid even at a physical wall.
+For each candidate it then defines
+\begin{equation}
+ \rho_p=\sqrt{(\Delta Y_p/s_y)^2+(\Delta Z_p/s_z)^2},\qquad
+ \theta_p=\operatorname{atan2}(\Delta Z_p,\Delta Y_p)\in[-\pi,\pi].
+\label{eq:rho-order}
+\end{equation}
+Here $\rho_p$ is a dimensionless local-grid distance, whereas $\theta_p$ is used only to
+break equal-$\rho_p$ ties. The enumerated array is sorted lexicographically by
+\begin{equation}
+ (\rho_p,\theta_p,\iota_p,\sigma_p).
+\label{eq:project-candidate-order}
+\end{equation}
+Floating-point keys are compared directly; there is no epsilon-equality rule.
+
+\paragraph{Set 2: the candidate pool of at most 160 points.}
+\noindent\textbf{Key point:} For an interior arrival node on the audited grids, Set 2 is
+not the 160 globally nearest points in Set 1: it first retains the 48 neighbours in a
+protected seven-by-seven index-space window, then retains the 112 nearest unique
+physical nodes among the other 1040 candidates, where ``nearest'' is determined first
+by $\rho_p$ and the remaining keys only break exact ties. Thus
+\begin{equation}
+ \underbrace{1088}_{\text{Set 1}}
+ =\underbrace{48}_{\text{protected}}+\underbrace{1040}_{\text{other candidates}},
+ \qquad
+ \underbrace{160}_{\text{Set 2}}
+ =\underbrace{48}_{\text{protected}}+\underbrace{112}_{\text{nearest retained}}.
+\label{eq:set-two-counts}
+\end{equation}
+
+\emph{Pass 0: retain the 48 protected neighbours.}
+The protected index-space window is
+\begin{equation}
+\begin{aligned}
+ k_{\rm lo}={}&\min\!\bigl(\max(c_k-3,0),N_z-7\bigr),\\
+ \mathcal W_{\rm prot}={}&\{(d_j,d_k):-3\le d_j\le3,\;
+ k_{\rm lo}-c_k\le d_k\le k_{\rm lo}+6-c_k\}
+ \setminus\{(0,0)\}.
+\end{aligned}
+\label{eq:mandatory-window}
+\end{equation}
+Here $k_{\rm lo}$ is the first physical $k$-index of the protected seven-row block.
+Away from a wall, $k_{\rm lo}=c_k-3$ and hence $-3\le d_k\le3$. At the lower wall
+$c_k=0$, the range becomes $0\le d_k\le6$; at the upper wall $c_k=N_z-1$, it becomes
+$-6\le d_k\le0$. Thus the same seven-by-seven offset window is shifted inward near a
+wall without admitting ghosts. Removing $(0,0)$ excludes the centre, leaving
+$7\mathbin{\times}7-1=48$ protected neighbours on the audited grids. These 48 points
+enter Set 2 even if some unprotected candidates have smaller $\rho_p$.
+
+\emph{Pass 1: fill the remaining 112 slots by normalised physical distance.}
+For an interior node, Pass 1 scans the other $1088-48=1040$ candidates in the order
+$ (\rho_p,\theta_p,\iota_p,\sigma_p)$ and inserts the first 112 unique physical nodes.
+Before each insertion, the pool is searched for the same $\iota_p$
+(\texttt{physical\_id} in the code); a later periodic image of an already retained node
+is discarded. Equivalently, the complete priority key is
+\[
+ (\mathrm{pass},\rho_p,\theta_p,\iota_p,\sigma_p),
+\]
+with protected-window points assigned to Pass 0. The four candidate keys do not receive
+separate point quotas: $\rho_p$ supplies the primary ordering, while $\theta_p$,
+$\iota_p$, and $\sigma_p$ are consulted successively only when all preceding keys are
+exactly equal.
+
+Near a wall, Set 1 contains fewer than 1088 candidates, so the pool of unprotected
+candidates is smaller than 1040; the algorithm itself is unchanged. On the audited
+PH/nonPH grids, enough unique candidates still exist, so Pass 0 retains 48 protected
+points and Pass 1 still fills the remaining $160-48=112$ slots. If Set 1 were exhausted
+earlier, Set 2 would simply contain fewer than 160 points. If this header is reused with
+$N_y\le32$, an explicit guard comparing $\iota_p$ with the centre's canonical-node label
+must be added before making the same uniqueness claim; the present input check alone
+allows $\texttt{NI}=N_y+1\ge8$, that is, $N_y\ge7$.
+
+The protected window is needed because, on a strongly stretched grid, the first 160
+points in pure $\rho_p$ order can occupy at most six nearly parallel wall-normal layers.
+Such a set can make the degree-six sampling problem algebraically deficient. Protection
+keeps a seven-layer construction available to both the compact and repair tiers.
+Protection means \emph{must enter the pool}, not \emph{must enter the final stencil}.
+
+\paragraph{Set 3: the final 31-point footprint.}
+The final footprint contains the arrival node, labelled $n=0$, and exactly 30 physical
+neighbours, labelled $n=1,\ldots,30$. Only the 30 neighbours form rows of the algebraic
+matrices:
+\begin{equation}
+ \bm X,\bm W\in\mathbb R^{30\times27},\qquad
+ \bm M=\bm X^{\mathsf T}\bm W\in\mathbb R^{27\times27}.
+\label{eq:project-shapes}
+\end{equation}
+The centre is not a thirty-first row. After the 30 neighbour weights are obtained, its
+weight is set to $w_0=1-\sum_{n=1}^{30}w_n$ so that constants are reproduced exactly.
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}P{3.0cm}P{5.4cm}X@{}}
+\toprule
+\textbf{Where the selector stops} & \textbf{Points forced into the final footprint}
+& \textbf{What may change} \\
+\midrule
+Compact tier & All 30 noncentre points of the fixed pyramid & Only the scale parameters
+change; no point is replaced. \\
+Repair source A & The same 30 pyramid neighbours & The amplification ceiling is relaxed. \\
+Repair source B & 24--27 QRCP anchors from the pyramid & The remaining 6--3 points are
+replaced by eligible non-template candidates. \\
+Repair source C & 27 QRCP anchors from a pool prefix & Three additional eligible
+non-anchor candidates complete the footprint. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Therefore the protected pool window, the nearest points in $\rho$, and the final
+30-neighbour footprint are different sets. Across repaired nodes there is no universal
+list of 30 index offsets.
+
+\subsubsection{Compact tier: fixed index template, then physical-coordinate test}
+\label{sec:project-compact-tier}
+
+\paragraph{Purpose of this stage.}
+This stage proposes one compact 31-point topology in structured-index space, maps it to
+the actual physical coordinates, and accepts the first scale choice that passes the
+algebraic certificate. The topology proposes; it does not prove solvability.
+
+\paragraph{Step 1: construct the template in index space.}
+The first trial ris not obtained by taking the 30 nearest points in physical distance.
+Instead, \texttt{b2\_pattern} chooses seven consecutive physical $k$-index layers. Near a
+wall the entire seven-layer block is shifted into the physical domain. The resulting
+layer offsets $d_k$ are sorted by increasing $|d_k|$; at equal distance the negative
+offset is placed first. The numbers of points assigned to the seven ordered layers are
+\begin{equation}
+ (7,7,5,5,3,3,1),
+ \label{eq:pyramid-counts}
+\end{equation}
+where each layer uses the streamwise offset order
+$d_j=0,+1,-1,+2,-2,\ldots$. The counts sum to 31 and include the centre
+$(d_j,d_k)=(0,0)$ once; removing that centre leaves the required 30 neighbours.
+
+For an interior centre, the seven $d_k$ values are
+\[
+ 0,-1,+1,-2,+2,-3,+3.
+\]
+At the lower wall they are $0,+1,\ldots,+6$, and at the upper wall they are
+$0,-1,\ldots,-6$. Thus the template is fixed in structured index space. After the index
+offsets are mapped through $Y(j_p,k_p),Z(j_p,k_p)$, however, the physical cloud can be
+stretched, sheared or curved; it need not look like a regular pyramid or diamond.
+
+The seven-layer topology is intended to avoid the observed failure in which a
+nearest-point cloud collapses onto at most six nearly parallel layers. Six such physical
+layers can lie on the zero set of a nonzero degree-six product polynomial, making the
+$P_6$ sampling matrix deficient. The template removes that specific geometry in the
+intended grids, but it is not an analytic proof that every mapped template is unisolvent.
+
+\paragraph{Step 2: define the anisotropic coordinate scaling.}
+Using the local spacings in \eqref{eq:project-local-spacing}, define
+\begin{equation}
+ A=\operatorname{clamp}(s_y/s_z,1/4096,4096),\qquad
+ \beta\in\{0,\tfrac12,1\},\qquad
+ a_y=A^{\beta/2},\quad a_z=a_y^{-1},
+\label{eq:beta-ladder}
+\end{equation}
+and, for neighbour $n$, define the scaled physical displacements
+\begin{equation}
+ \overline Y_n=\frac{\Delta Y_n}{a_y},\qquad
+ \overline Z_n=\frac{\Delta Z_n}{a_z},\qquad
+ \overline r_n=\sqrt{\overline Y_n^2+\overline Z_n^2}.
+\label{eq:project-scaled-displacement}
+\end{equation}
+The bars denote coordinate scaling; they do not denote an average. Because
+$a_ya_z=1$, this is an invertible diagonal change of coordinates and does not change the
+polynomial space that is reproduced.
+
+\paragraph{Step 3: define $h$ and the Wendland support.}
+For each value of $\beta$, the template length scale is the root-mean-square radius of
+its 30 neighbours:
+\begin{equation}
+ h_{\rm tmpl}=
+ \left(\frac1{30}\sum_{n=1}^{30}\overline r_n^2\right)^{1/2}.
+\label{eq:project-template-h}
+\end{equation}
+Hence $h$ is \emph{not} the minimum grid spacing. The code tries
+\[
+ h=m_h\,h_{\rm tmpl},\qquad m_h\in\{1,1.2,1.5,2\},
+\]
+in the written order. The dimensionless radial coordinate of neighbour $n$ is
+\begin{equation}
+ q_n=\frac{\overline r_n}{h}
+ =\frac{\sqrt{(\Delta Y_n/a_y)^2+(\Delta Z_n/a_z)^2}}{h}.
+\label{eq:active-support}
+\end{equation}
+The radial factor is the compactly supported Wendland $C^2$ function
+\begin{equation}
+ \psi(q)=
+ \begin{cases}
+  (1-q/2)^4(1+2q), & 0\le q<2,\\
+  0, & q\ge2.
+ \end{cases}
+\label{eq:project-wendland-c2}
+\end{equation}
+All 30 template neighbours must satisfy $q_n<2$; otherwise at least one row of
+$\bm W$ is zero and the trial is rejected.
+
+\paragraph{Step 4: compact-first acceptance.}
+The loop order is $\beta=0,\tfrac12,1$, with the four $h$ multipliers tested inside each
+$\beta$. The first pair $(\beta,h)$ that passes every gate in
+\S\ref{sec:project-admissibility} is accepted immediately. Therefore the compact tier
+does not optimise over alternative point sets or search for the smallest condition
+number. It preserves the index-space template whenever that template is numerically
+acceptable.
+
+\subsubsection{Admissibility: rank, conditioning and amplification}
+\label{sec:project-admissibility}
+
+\paragraph{Purpose of this stage.}
+This stage answers the central solvability question. No argument based only on the
+pyramid shape is used to declare $\bm M$ nonsingular. Instead, $\bm X$, $\bm W$ and
+$\bm M$ are assembled from the 30 mapped physical points and certified numerically.
+
+\paragraph{Step 1: define the 27 basis labels.}
+Let
+\begin{equation}
+ \mathcal A_6=
+ \{(a,b)\in\mathbb{N}_0^2:1\le a+b\le6\}.
+\label{eq:project-basis-set}
+\end{equation}
+This set contains $2+3+4+5+6+7=27$ exponent pairs. The constant pair $(0,0)$ is omitted
+because the centre weight later enforces constant reproduction. We use
+$\mu=\mu(a,b)$ for a column label of $\bm X$ and
+$\alpha=\alpha(u,v)$ for a column label of $\bm W$, where both $(a,b)$ and $(u,v)$
+independently range over $\mathcal A_6$. The two labels each have 27 possible values,
+but $\mu$ is not set equal to $\alpha$. More explicitly, $\mu(a,b)$ and
+$\alpha(u,v)$ mean ``the integer column occupied by this exponent pair'' in the fixed
+code ordering; they are column-address maps, not additional polynomial variables.
+
+For neighbour $n$, divide the scaled displacements in
+\eqref{eq:project-scaled-displacement} by $h$:
+\begin{equation}
+ \xi_n=\frac{\overline Y_n}{h}=\frac{\Delta Y_n}{a_yh},\qquad
+ \eta_n=\frac{\overline Z_n}{h}=\frac{\Delta Z_n}{a_zh},\qquad
+ q_n=\sqrt{\xi_n^2+\eta_n^2}.
+\label{eq:project-normalised-coordinates}
+\end{equation}
+Here $q_n$ is the Wendland radial coordinate of a \emph{stencil point}. It is not an LBM
+direction label; lattice directions will be denoted by $d$ in
+\S\ref{sec:project-final-solve}.
+
+\paragraph{Step 2: define every entry of $\bm X$, $\bm W$ and $\bm M$.}
+For $\mu=\mu(a,b)$, the Taylor row is
+\begin{equation}
+ X_{n,\mu(a,b)}=\frac{\xi_n^a\eta_n^b}{a!\,b!}.
+\label{eq:project-X-entry}
+\end{equation}
+Let $H_r$ be the physicists' Hermite polynomial,
+$H_0(x)=1$, $H_1(x)=2x$, and
+$H_{r+1}(x)=2xH_r(x)-2rH_{r-1}(x)$. For
+$\alpha=\alpha(u,v)$, the Hermite--Wendland row is
+\begin{equation}
+ W_{n,\alpha(u,v)}
+ =\psi(q_n)\,2^{-(u+v)/2}
+ H_u\!\left(\frac{\xi_n}{\sqrt2}\right)
+ H_v\!\left(\frac{\eta_n}{\sqrt2}\right),
+\label{eq:project-W-entry}
+\end{equation}
+where $\psi$ is given by \eqref{eq:project-wendland-c2}. The moment matrix is
+\begin{equation}
+ M_{\mu\alpha}
+ =\sum_{n=1}^{30}X_{n\mu}W_{n\alpha},
+ \qquad \bm M=\bm X^{\mathsf T}\bm W.
+\label{eq:cross-moment-entry}
+\end{equation}
+This is a sum, not an average; dividing it by 30 would only multiply the whole matrix by a
+nonzero scalar and would not change its rank.
+
+\paragraph{Why the template does not prove that $\bm M$ is full rank.}
+Let $\bm x_n$ and $\bm w_n$ be row $n$ of $\bm X$ and $\bm W$. Then
+\begin{equation}
+ \bm M=\sum_{n=1}^{30}\bm x_n^{\mathsf T}\bm w_n.
+\label{eq:rank-one-sum}
+\end{equation}
+Each point contributes a matrix of rank at most one. Thirty contributions do not
+automatically span 27 independent directions, and different cross terms can cancel.
+Moreover, $\bm w_n$ is not a positive scalar multiple of $\bm x_n$. For example,
+\begin{equation}
+ X_{n,\mu(2,0)}=\frac{\xi_n^2}{2},\qquad
+ W_{n,\alpha(2,0)}=\psi(q_n)(\xi_n^2-1),\qquad
+ W_{n,\alpha(3,0)}=\psi(q_n)(\xi_n^3-3\xi_n).
+\label{eq:hermite-not-proportional}
+\end{equation}
+Therefore $\bm M$ is not a positive weighted Gram matrix
+$\bm X^{\mathsf T}\bm D\bm X$, and positive definiteness cannot be inferred from
+full column rank of $\bm X$.
+
+An equivalent exact statement follows from thin QR factorizations
+\begin{equation}
+ \bm X=\bm Q_X\bm R_X,\qquad
+ \bm W=\bm Q_W\bm R_W,\qquad
+ \bm M=\bm R_X^{\mathsf T}
+       (\bm Q_X^{\mathsf T}\bm Q_W)\bm R_W.
+\label{eq:cross-subspace-factorisation}
+\end{equation}
+Here the columns of $\bm Q_X,\bm Q_W\in\mathbb R^{30\times27}$ are orthonormal. If
+$\bm X$ and $\bm W$ have full column rank, the triangular factors $\bm R_X,\bm R_W$ are
+nonsingular, and
+\begin{equation}
+ \operatorname{rank}(\bm M)=27
+ \quad\Longleftrightarrow\quad
+ \operatorname{rank}(\bm Q_X^{\mathsf T}\bm Q_W)=27
+ \quad\Longleftrightarrow\quad
+ \operatorname{col}(\bm W)\cap\ker(\bm X^{\mathsf T})=\{\bm0\}.
+\label{eq:cross-pairing-condition}
+\end{equation}
+The fixed pyramid has no proven uniform lower bound for this cross-space pairing on every
+allowed warped grid. It must therefore be checked after its actual coordinates are known.
+
+\paragraph{Step 3: exact uniqueness condition.}
+For a right-hand side $\bm C\in\mathbb R^{27}$, the coefficient vector
+$\bm\Psi\in\mathbb R^{27}$ is defined by $\bm M\bm\Psi=\bm C$. Its exact
+unique-solvability condition is
+\begin{equation}
+ \operatorname{rank}(\bm M)
+ =\operatorname{rank}([\bm M\mid\bm C])=27.
+\label{eq:unique-solvability}
+\end{equation}
+Because $\bm M$ is a $27\times27$ square matrix, $\operatorname{rank}(\bm M)=27$ alone
+implies the augmented-rank equality for every $\bm C$.
+
+%% 作者在文章裡寫 "deterministic rank-revealing QR" 是在描述目的和性質，你的 code 裡實際跑的是 QRCP 這個具體演算法來達成這個目的。%%
+
+\paragraph{Step 4: numerical-rank gates.}
+For each trial, the decisive question is whether the assembled moment matrix
+$\bm M=\bm X^{\mathsf T}\bm W$ has numerical rank 27. The code does not apply its QR
+rank test directly to the raw $\bm M$. It first performs six fixed row/column max-norm
+equilibration sweeps and forms
+\begin{equation}
+ \widetilde{\bm M}=\bm D_r\bm M\bm D_c,
+ \qquad
+ \operatorname{rank}(\widetilde{\bm M})=\operatorname{rank}(\bm M),
+\label{eq:project-equilibrated-rank}
+\end{equation}
+The subscripts $r$ and $c$ mean \emph{row} and \emph{column}; they do not denote a
+radius. The two matrices are
+\begin{equation}
+ \bm D_r=\operatorname{diag}(d^{\rm row}_0,\ldots,d^{\rm row}_{26}),
+ \qquad
+ \bm D_c=\operatorname{diag}(d^{\rm col}_0,\ldots,d^{\rm col}_{26}).
+\label{eq:project-equilibration-diagonals}
+\end{equation}
+The source does not store 729 entries for either diagonal matrix. The arrays
+\texttt{Dr[27]} and \texttt{Dc[27]} store only
+$d_i^{\rm row}$ and $d_i^{\rm col}$, respectively. They start at one. During each
+equilibration sweep, the code first divides every row by its largest absolute entry and
+accumulates that multiplier in \texttt{Dr}; it then does the same for every column and
+accumulates the multiplier in \texttt{Dc}. In index notation, one sweep performs
+\begin{equation}
+\begin{aligned}
+ s_i^{\rm row}&=\max_j|\widetilde M_{ij}|,&
+ \widetilde M_{i:}&\leftarrow\widetilde M_{i:}/s_i^{\rm row},&
+ d_i^{\rm row}&\leftarrow d_i^{\rm row}/s_i^{\rm row},\\
+ s_j^{\rm col}&=\max_i|\widetilde M_{ij}|,&
+ \widetilde M_{:j}&\leftarrow\widetilde M_{:j}/s_j^{\rm col},&
+ d_j^{\rm col}&\leftarrow d_j^{\rm col}/s_j^{\rm col}.
+\end{aligned}
+\label{eq:project-equilibration-sweep}
+\end{equation}
+Thus $\bm D_r$ rescales the 27 equations (rows), whereas $\bm D_c$ rescales the 27
+unknowns (columns). Both contain positive finite diagonal entries and are therefore
+nonsingular, so the exact rank is unchanged.
+
+The rank gate uses only $\widetilde{\bm M}$. When a right-hand side is later solved, the
+same scaling is used consistently:
+\begin{equation}
+ \widetilde{\bm C}=\bm D_r\bm C,
+ \qquad
+ \widetilde{\bm M}\bm y=\widetilde{\bm C},
+ \qquad
+ \bm\Psi=\bm D_c\bm y.
+\label{eq:project-equilibrated-system}
+\end{equation}
+Substitution gives
+$\bm D_r\bm M\bm D_c\bm y=\bm D_r\bm C$, which is equivalent to
+$\bm M\bm\Psi=\bm C$. Therefore equilibration changes only numerical scaling, not the
+original solution. The reason for testing $\widetilde{\bm M}$ is that entries associated
+with polynomial degrees one through six can have very different magnitudes; a QR test on
+the raw matrix can mistake this scale imbalance for rank loss.
+
+The code then applies deterministic rank-revealing QR to
+$\widetilde{\bm M}^{\mathsf T}$. If $p_i$ is the residual norm of the $i$th QR pivot, it
+is counted as an independent direction only when
+\begin{equation}
+ p_i>\tau_{\widetilde M}, \quad
+  \tau_{\widetilde M}
+ =27\,\epsilon_{\rm dbl}\,\|\widetilde{\bm M}\|_F.
+\label{eq:project-rank-threshold}
+\end{equation}
+The result is therefore interpreted as follows:
+\begin{itemize}[leftmargin=2.0em]
+\item if QR finds 27 such pivots,
+      $\operatorname{rank}_{\rm num}(\widetilde{\bm M})=27$ and the moment-matrix
+      rank gate passes;
+\item if QR finds fewer than 27, the current $(\text{stencil},\beta,h)$ trial is
+      rejected and the selector proceeds to the next trial. No weights are exported.
+\end{itemize}
+
+Before this decisive test, the same QR routine also checks column-normalised versions of
+$\bm X$ and $\bm W$. These two preliminary tests identify whether rank loss already
+originates in polynomial sampling or in the Hermite--Wendland rows. Consequently every
+trial must pass
+\begin{equation}
+ \operatorname{rank}_{\rm num}(\bm X)=27,\qquad
+ \operatorname{rank}_{\rm num}(\bm W)=27,\qquad
+ \operatorname{rank}_{\rm num}(\widetilde{\bm M})=27.
+\label{eq:three-ranks}
+\end{equation}
+The first two conditions are necessary because
+$\operatorname{rank}(\bm X^{\mathsf T}\bm W)
+\le\min\{\operatorname{rank}(\bm X),\operatorname{rank}(\bm W)\}$, but they do not
+guarantee the third. Hence the QR result for $\widetilde{\bm M}$ is the decisive rank
+test. This is a double-precision numerical certificate, not a symbolic proof of
+$\det(\bm M)\ne0$.
+
+\paragraph{Step 5: reciprocal-conditioning gate.}
+The equilibrated matrix must satisfy
+\begin{equation}
+ \operatorname{rcond}_{\infty}(\widetilde{\bm M})>\gamma_{27},\qquad
+ \gamma_{27}=
+ \frac{27\epsilon_{\rm dbl}}{1-27\epsilon_{\rm dbl}}
+ \simeq5.9952\times10^{-15},
+\label{eq:project-rcond}
+\end{equation}
+where $\epsilon_{\rm dbl}$ is double-precision machine epsilon. This is a
+roundoff-level rejection threshold; it is not a claim that every accepted matrix has a
+small condition number. Here
+$\operatorname{rcond}_{\infty}(\bm B)=
+1/(\|\bm B\|_\infty\|\bm B^{-1}\|_\infty)$ for a nonsingular $\bm B$.
+The raw $\operatorname{rcond}_{\infty}(\bm M)$ is retained for diagnosis but is not an
+acceptance gate.
+
+\paragraph{Step 6: direction-independent amplification gate.}
+Define two 27-component probe right-hand sides. The $Y$ probe
+$\bm e^{[Y]}$ is one at basis label $(1,0)$ and zero elsewhere; the $Z$ probe
+$\bm e^{[Z]}$ is one at $(0,1)$ and zero elsewhere. For
+$\ell\in\{Y,Z\}$, solve
+\begin{equation}
+ \bm M\bm\Psi^{[\ell]}=\bm e^{[\ell]},\qquad
+ w_n^{[\ell]}=\sum_{\alpha=1}^{27}
+ W_{n\alpha}\Psi_\alpha^{[\ell]},\qquad
+ w_0^{[\ell]}=1-\sum_{n=1}^{30}w_n^{[\ell]}.
+\label{eq:project-probe-weights}
+\end{equation}
+The direction-independent amplification is
+\begin{equation}
+ \lambda_0=
+ \max_{\ell\in\{Y,Z\}}\sum_{n=0}^{30}|w_n^{[\ell]}|.
+\label{eq:lambda-zero}
+\end{equation}
+The compact tier requires $\lambda_0\le512$; repair trials require
+$\lambda_0\le4096$. These limits reject extreme cancellation. They are ceilings, not
+quantities minimised by the selector.
+
+Passing \eqref{eq:three-ranks}--\eqref{eq:lambda-zero} is an a posteriori
+finite-precision certificate for the particular coordinates, $h$ and anisotropic scales
+that were tested. It is not an analytic proof that every stencil proposed by the
+index-space pyramid is nonsingular. A failed compact trial is sent to the next
+$(\beta,h)$ pair or to the repair tier; if every trial fails, no stencil is exported.
+
+\subsubsection{Repair tier and the leading-error objective}
+\label{sec:project-repair-tier}
+
+\paragraph{Purpose of this stage.}
+This stage is a fallback, not a second optimisation pass over an already accepted
+template. It constructs alternative 30-neighbour clouds only after all compact trials
+fail, applies exactly the same solvability gates, and then ranks only the survivors by
+their leading degree-seven moment leakage.
+
+\paragraph{When repair is entered.}
+Repair is not run after a compact stencil has already passed. It is entered only when
+every combination
+\[
+ \beta\in\{0,\tfrac12,1\},\qquad
+ h/h_{\rm tmpl}\in\{1,1.2,1.5,2\}
+\]
+for the fixed pyramid has failed at least one admissibility gate in
+\S\ref{sec:project-admissibility}.
+
+\paragraph{How the three repair sources construct 30 neighbours.}
+Here QRCP means the deterministic rank-revealing QR procedure that treats physical points
+as row candidates and orders the selected rows by their independent contribution to the
+Taylor matrix. Let $N_{\rm pool}$ denote the number of retained pool points. In the
+table, a prefix of nominal length $L$ means the first $\min(L,N_{\rm pool})$ points.
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}P{2.2cm}P{5.5cm}X@{}}
+\toprule
+\textbf{Source} & \textbf{Construction} & \textbf{Points guaranteed in that trial} \\
+\midrule
+A: unchanged pyramid &
+Use exactly the same 30 neighbours as the compact template, but apply the repair-tier
+limit $\lambda_0\le4096$. &
+All 30 template neighbours. \\
+B: minimally modified pyramid &
+Run QRCP on the 30 template rows. If its returned rank
+$r_{\rm tmpl}$ is at least 24, retain the first
+$\min(r_{\rm tmpl},27)$ template anchors. Exclude every other template point from refill,
+then add eligible non-template candidates in pool order until 30 points are present. &
+Between 24 and 27 template anchors; consequently 6 to 3 points are replaced. \\
+C: pool-prefix cloud &
+Open the first 40, 60, 100 and 160 pool entries in turn. Among entries satisfying
+$q_n<2$, QRCP must find exactly 27 independent anchors; the first three eligible
+non-anchors in pool order complete the cloud. &
+Exactly 27 pool-QRCP anchors and three deterministic local fill points. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+Thus source B can replace three to six points. The nearby source-code comment that says
+at most three replacements is stale relative to the executable condition
+$r_{\rm tmpl}\ge24$.
+
+\paragraph{Scale parameters tried by repair.}
+Sources A and B reuse $h_{\rm tmpl}$ from \eqref{eq:project-template-h} and try
+\[
+ h/h_{\rm tmpl}\in\{1,1.2,1.5,2\}.
+\]
+For source C, let $h_{\rm base}$ be the RMS value in
+\eqref{eq:project-template-h} computed instead from the first 30 candidate-pool entries
+at the current $\beta$. Source C tries
+\[
+ h/h_{\rm base}\in\{1.2,1.5,2,2.5,3,4,5,6\}.
+\]
+All three sources are generated for each $\beta$ in \eqref{eq:beta-ladder}, and every
+complete trial must independently pass the support, rank, reciprocal-conditioning and
+$\lambda_0$ gates of \S\ref{sec:project-admissibility}.
+
+\paragraph{How the winning repair cloud is chosen.}
+The first-moment probe weights $w_n^{[Y]}$ and $w_n^{[Z]}$ were defined in
+\eqref{eq:project-probe-weights}. Using the scaled physical displacements
+$\overline Y_n,\overline Z_n$ from \eqref{eq:project-scaled-displacement}, define
+\begin{equation}
+ T_7=
+ \sum_{\ell\in\{Y,Z\}}\ \sum_{\substack{a+b=7\\a,b\in\mathbb N_0}}
+ \frac{1}{a!\,b!}
+ \left|
+ \sum_{n=1}^{30}
+ w_n^{[\ell]}\overline Y_n^a\overline Z_n^b
+ \right|.
+\label{eq:T7-selector}
+\end{equation}
+The $P_6$ moment conditions control degrees zero through six, so degree seven is the first
+uncontrolled Taylor degree. The code evaluates \eqref{eq:T7-selector} for every
+admissible source-A, source-B and source-C trial and retains the strictly smallest value.
+Because the comparison is strict, an exact tie retains the trial encountered first in the
+fixed loop order.
+
+$T_7$ is a direction-independent comparison proxy based on the two first-moment
+responses. It is not the complete truncation error for a particular LBM departure point,
+and it is meaningful here only for comparing trials at the same arrival node. The older
+helper proportional to $\lambda_0r_{\max}^7$ has no caller in the active selector and is
+not the current optimisation objective.
+
+\subsubsection{Final direction-dependent solve and fail-closed export}
+\label{sec:project-final-solve}
+
+\paragraph{Purpose of this stage.}
+The preceding stages choose only the geometry. This final stage supplies one departure
+point at a time, computes that direction's weights on the already selected footprint,
+and prevents any failed solution from reaching the time-step loop.
+
+\paragraph{One footprint, different weights for different lattice directions.}
+Stages 1--4 select geometry without using an LBM velocity. Consequently one arrival node
+has one set of 31 storage IDs shared by all lattice directions. Direction-specific data
+enter only now through the departure point.
+
+Let $d$ denote an LBM direction and let
+$(e_y^{(d)},e_z^{(d)})$ be its two lattice-velocity components. The physical displacement
+from the arrival node to the departure point is, with $\Delta t$ denoting the global
+time step,
+\begin{equation}
+ \delta_y^{(d)}=-\Delta t\,e_y^{(d)},\qquad
+ \delta_z^{(d)}=-\Delta t\,e_z^{(d)}.
+\label{eq:project-departure-displacement}
+\end{equation}
+Use the same $a_y,a_z,h$ as the accepted stencil and define
+\begin{equation}
+ \xi_\delta^{(d)}=\frac{\delta_y^{(d)}}{a_yh},\qquad
+ \eta_\delta^{(d)}=\frac{\delta_z^{(d)}}{a_zh}.
+\label{eq:project-departure-normalised}
+\end{equation}
+For the Taylor label $\mu=\mu(a,b)$ introduced in
+\eqref{eq:project-basis-set}, the right-hand side is
+\begin{equation}
+ C_{\mu(a,b)}^{(d)}
+ =\frac{(\xi_\delta^{(d)})^a(\eta_\delta^{(d)})^b}{a!\,b!}.
+\label{eq:project-direction-rhs}
+\end{equation}
+This is the precise meaning of the abbreviated statement
+$\bm C^{(d)}=\bm X(\bm\delta^{(d)})$.
+
+\paragraph{Solve for coefficients, then recover interpolation weights.}
+For direction $d$, solve
+\begin{equation}
+ \bm M\bm\Psi^{(d)}=\bm C^{(d)}.
+\label{eq:project-direction-solve}
+\end{equation}
+The 30 neighbour weights and the structural centre weight are then
+\begin{equation}
+ w_n^{(d)}=\sum_{\alpha=1}^{27}
+ W_{n\alpha}\Psi_\alpha^{(d)}
+ \quad (n=1,\ldots,30),\qquad
+ w_0^{(d)}=1-\sum_{n=1}^{30}w_n^{(d)}.
+\label{eq:project-direction-weights}
+\end{equation}
+Thus the footprint and $\bm M$ are shared across directions, whereas
+$\bm C^{(d)}$, $\bm\Psi^{(d)}$ and $\bm w^{(d)}$ depend on the departure direction.
+
+\paragraph{Hard solve gates.}
+The code equilibrates \eqref{eq:project-direction-solve} and solves it independently by
+GEPP, explicit PLU and Gauss--Jordan. All three solutions undergo double-double iterative
+refinement using the factored residual of the original product
+$\bm X^{\mathsf T}\bm W$. Export is permitted only if
+\begin{enumerate}[label=(\roman*),leftmargin=2.0em]
+\item all three solvers report success;
+\item each solver's normwise and componentwise backward errors are at most
+      $64\gamma_{27}$;
+\item $\operatorname{rcond}_{\infty}(\widetilde{\bm M})>\gamma_{27}$; and
+\item for every component of $\bm\Psi$, each solver pair $(s,t)$ satisfies
+      $|\Psi_i^{(s)}-\Psi_i^{(t)}|/
+       \max(1,|\Psi_i^{(s)}|,|\Psi_i^{(t)}|)\le64\gamma_{27}$.
+\end{enumerate}
+In item (iv), $i=1,\ldots,27$, and $(s,t)$ runs over the three pairs
+GEPP--PLU, GEPP--Gauss--Jordan and PLU--Gauss--Jordan.
+Only after these tests does the code form \eqref{eq:project-direction-weights} and allow
+\texttt{labfm\_compact\_export} to copy the 31 IDs and weights into the time-step data.
+
+\paragraph{Warnings versus hard failures.}
+After a successful solve, let
+$\bm w_{\rm nb}^{(d)}=(w_1^{(d)},\ldots,w_{30}^{(d)})^{\mathsf T}$ denote the neighbour
+weights without the centre weight. The code also reports
+\begin{equation}
+ R_d=
+ \frac{\|\bm X^{\mathsf T}\bm w_{\rm nb}^{(d)}-\bm C^{(d)}\|_2}
+      {\|\bm C^{(d)}\|_2},
+ \qquad
+ \Lambda_d=\sum_{n=0}^{30}|w_n^{(d)}|,
+\label{eq:project-direction-diagnostics}
+\end{equation}
+with the zero denominator treated as one for the rest direction. The thresholds
+$R_d>10^{-8}$ and $\Lambda_d>6$ currently set warning bits only; they are not the same as
+the selection hard gates \eqref{eq:project-rcond} and \eqref{eq:lambda-zero}.
+
+If point selection or any hard solve gate fails, no compact stencil is exported. The
+active path has no pseudoinverse, regularisation, wall-ghost substitution or
+nearest-neighbour fallback. A concise Chinese source map is maintained separately in
+\path{labfm/stencil.md}.
+
+\subsection{A parity diagnostic for sampling adequacy}
+\label{sec:parity}
+
+The angular sampling condition of \S\ref{sec:sampling} is stated as a geometric rule
+and measured in~\cite{KLN2020} through the condition number, which is a lagging
+indicator: by the time $\kappa$ jumps, undersampling is already severe. A direct and
+inexpensive leading indicator follows from the parity structure of the continuum limit
+\New.
+
+For the Hermite construction, $\mathrm{He}_n$ has parity $(-1)^n$, so the integrand of
+$\langle X^{\alpha},W^{\beta}\rangle$ with $\alpha=(a,b,c)$, $\beta=(a',b',c')$ is odd
+in at least one coordinate unless every one of $a{+}a'$, $b{+}b'$, $c{+}c'$ is even. On
+an isotropic, symmetric support the integral then vanishes:
+\begin{equation}
+\bigl\langle X^{\alpha},W^{\beta}\bigr\rangle=0
+\quad\text{unless } a{+}a',\ b{+}b',\ c{+}c'\ \text{are all even.}
+\label{eq:parity}
+\end{equation}
+This is the analytic content of the pattern of machine-zero entries displayed
+in~\cite[Fig.~5]{KLN2020}. Define the \emph{parity defect}
+\begin{equation}
+\eta_i\;=\;\Biggl(
+\frac{\sum_{(\alpha,\beta)\ \text{forbidden}}\bigl|M^{\alpha\beta}_i\bigr|^{2}}
+{\sum_{\alpha,\beta}\bigl|M^{\alpha\beta}_i\bigr|^{2}}\Biggr)^{1/2},
+\label{eq:parity-defect}
+\end{equation}
+computable in $O(p^{2})$ with no quadrature. It serves three purposes: on a uniform
+Cartesian cloud $\eta_i\lesssim10^{-14}$ is a sharp test of the assembly (a failure
+indicates a multi-index ordering or Hermite recurrence error); the value of $h/s$ at
+which $\eta_i$ begins to rise locates the critical ratio ahead of any change in
+$\kappa$; and a large $\eta_i$ at a node correctly flags an anisotropic or one-sided
+stencil, identifying where the order must be reduced.
+
+Where an absolute rather than relative measure is wanted, the continuum reference
+$N_i\langle X^{\alpha},W^{\beta}\rangle$ of \eqref{eq:sampling-norm} may be evaluated
+by quadrature over the support and compared with the assembled $\bm M_i$.
+
+\subsection{Published stability results}
+\label{sec:stab-pub}
+
+For completeness, and because they bound what may legitimately be assumed:
+\begin{itemize}
+\item On ideal Cartesian distributions the convective operator has
+$\Re(\lambda)\approx0$ provided $\mathrm dW^{0}/\mathrm dr=0$ on the support boundary,
+a condition satisfied by the quadratic and Wendland fundamental functions but not by
+the conic one~\cite[\S 4.2]{KLN2020}. On distributions carrying disorder,
+$\Re(\lambda)>0$ for all choices tested.
+\item The Laplacian operator is stable, but the admissible level of distribution noise
+decreases as $m$ increases~\cite[\S 4.2, Table 1]{KLN2020}.
+\item Hyperviscosity operators up to $\nabla^{m}$ may be generated from the same
+system \eqref{eq:moments} by an appropriate choice of $\bm C^{\rm hv}$
+\cite[Eq.~(25)]{KLN2020}.
+\end{itemize}
+
+\begin{remark}
+These results concern \emph{differential} operators and therefore do not transfer
+directly to the present scheme, in which streaming is effected by interpolation. The
+governing stability condition for the scheme specified here is
+\eqref{eq:vn-crit} below.
+\end{remark}
+
+\subsection{Boundaries: what the literature actually reports}
+\label{sec:boundary}
+
+This subsection supersedes the abstract of~\cite{KLN2020} and is the single most
+consequential correction in this revision.
+
+\paragraph{The 2020 claim.} \cite{KLN2020} states in its abstract that ``at domain
+boundaries (with incomplete support) LABFM automatically provides one-sided differences
+of the same order as the internal scheme, up to 4th order'', and in \cite[\S
+IV\,A]{KLN2020} that convergence at order $m$ is retained near boundaries provided the
+distribution noise is small enough and $h/s$ large enough.
+
+\paragraph{The 2021 retraction.} \cite[\S 7.1]{KL2021}, by the same authors, reports
+that this does not hold:
+\begin{itemize}
+\item for one-sided stencils and $m>4$, ``the conditioning of the linear systems $M_i$
+was such that the solver didn't yield a valid solution'';
+\item ``a new stability analysis since \cite{KLN2020} (via the eigenvalues of the global
+derivative operator) has shown that for one-sided LABFM with $m=4$ the eigenvalues
+spread along the positive real axis: \emph{the operators are unstable}'';
+\item for nearly one-sided stencils one node in from the boundary, the viscous operators
+are stable but the convective operators remain unstable.
+\end{itemize}
+\cite{KL2021} accordingly \emph{abandons} one-sided LABFM and adopts a hybrid, which
+requires a strip of five uniformly distributed, locally orthogonal nodes along every
+boundary:
+
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Node} & $\partial/\partial\xi$ \textbf{(normal)}
+& $\partial/\partial\eta$ \textbf{(tangential)} & \textbf{Second derivatives} \\
+\midrule
+$i_0$ (on boundary) & one-sided FD & 1D-LABFM & FD $+$ 1D-LABFM \\
+$i_1$ & asymmetric FD & 1D-LABFM & LABFM, $m=4$ \\
+$i_2$ & centred FD & 1D-LABFM & LABFM, $m=4$ \\
+$i_3$, $i_4$, interior & LABFM & LABFM & LABFM \\
+\bottomrule
+\end{tabular}
+\end{center}
+\noindent(\cite[Table 1]{KL2021}; the one-dimensional formulation used for tangential
+derivatives is given in \cite[Appendix A, Eqs.~(A1)--(A7)]{KL2021}, and first
+derivatives at $i_1,i_2$ are rotated back to Cartesian components through the Jacobian
+\cite[Eq.~(24)]{KL2021}.) The production configuration of~\cite{KL2021} is therefore
+$m=6$ in the interior and an effectively fourth-order treatment in the boundary strip.
+
+\paragraph{Consequences for the present scheme.} Four, and they must be kept distinct.
+\begin{enumerate}[label=(\roman*)]
+\item \textbf{The conditioning risk transfers, but the categorical stencil conclusion
+does not.} For a fixed cloud, basis and scaling, $\bm M_i$ is independent of the
+right-hand side, so a singular derivative construction cannot be rescued merely by
+asking it to interpolate. This does not prove that every other degree-six physical
+cloud is singular. The current selector of \S\ref{sec:project-stencil} changes the cloud,
+permits a controlled anisotropic coordinate scaling, and requires the actual one-sided
+$\bm X$, $\bm W$ and equilibrated $\bm M$ to pass rank and reciprocal-condition gates.
+It therefore treats the 2021 result as a fail-closed warning to test each wall cloud,
+not as a theorem that $m>4$ is impossible for all interpolation selectors.
+\item \textbf{The instability result does not transfer directly.} It is an eigenvalue
+statement about the global \emph{derivative} matrix. The present scheme streams by
+interpolation, whose stability is governed by \eqref{eq:vn-crit}. Whether one-sided
+interpolation operators are admissible must therefore be settled by measuring
+$\max_{\bm k}|G_q(\bm k)|$ on one-sided stencils, not inferred from~\cite{KL2021}.
+\item \textbf{The current LABFM footprint is physical and one-sided at a wall.}
+Wall-normal ghosts are forbidden by \eqref{eq:enum-set}; the seven-layer template is
+clamped into the domain. Ghost layers remain necessary for the incumbent ITB/GILBM
+paths, boundary closure and statistics contract, but they are not LABFM stencil members.
+If the finite-difference hybrid of~\cite{KL2021} is later adopted, it is a different
+method branch rather than the selector presently encoded in
+\path{Lagrange_vs_LABFM/2.labfm/}.
+\item \textbf{Local algebraic acceptance is not global stability or physical
+validation.} Passing \eqref{eq:three-ranks}--\eqref{eq:lambda-zero} and the three-solver
+gate establishes that the local interpolation weights are numerically constructible.
+It does not establish the one-sided global amplification bound, observed seventh-order
+convergence at every wall geometry, or correctness of a wall-resolved production run.
+\end{enumerate}
+Open item U4 records what must be measured before a wall-resolved production claim is
+made.
+
+%========================================================================
+\section{The departure-point interpolation operator}
+\label{sec:interp}
+
+\subsection{Definition}
+
+Because the characteristics of the free-streaming operator are straight lines in
+physical space, the departure point is available in closed form,
+\begin{equation}
+\bm\delta_q=-\,\bm e_q\,c\,\Delta t,
+\qquad
+\bm r^{*}_q=\bm r_i+\bm\delta_q ,
+\label{eq:departure}
+\end{equation}
+with $c$ the lattice speed and $\Delta t$ the global time step. No integration of the
+characteristic and no metric information is required.
+
+\begin{remark}[The three points, and why the departure point carries no index]
+\label{rem:threepoints}
+Three locations appear and are easily conflated. The node $\bm r_i$ is the Taylor
+origin, the stencil centre, and the arrival node at which the result is stored; its
+role is exactly that of $i$ in~\cite{KLN2020} and is unchanged. The nodes $\bm r_j$,
+$j\in\mathcal N_i$, supply data; they are neighbours, and \emph{none of them is the
+departure point}. The departure point $\bm r^{*}_q$ is neither: it is a query location
+that enters only through the right-hand side of \eqref{eq:interp-op}. It does not
+appear in $\bm M_i$ at all, which is precisely why one factorisation serves all
+nineteen discrete velocities (Remark~\ref{rem:shared}).
+\end{remark}
+
+\begin{proposition}[Admissibility of the node-centred stencil; \New]
+\label{prop:cfl}
+Centring the stencil at $\bm r_i$ requires the departure point to lie within the
+support, $|\bm\delta_q|\le2h_i$. With $\Delta t=\mathrm{CFL}\cdot s_{\min}/c$ and
+$\max_q|\bm e_q|=\sqrt2$ for D3Q19, and taking the worst case $s_i=s_{\min}$,
+\begin{equation}
+\mathrm{CFL}\;\le\;\sqrt2\,\bigl(h/s\bigr).
+\label{eq:cfl-bound}
+\end{equation}
+\end{proposition}
+\noindent At $h/s=1.6$ this gives $\mathrm{CFL}\le2.26$; a working margin of one half of
+the support radius halves it. The present operating point, $\mathrm{CFL}=0.5$, places
+the departure point at between $2\,\%$ and $22\,\%$ of the support radius depending on
+local spacing, comfortably inside. The bound is recorded because it is not independent
+of the time-step question: the relaxation-time constraint
+$\tau=3\nu/\Delta t+\tfrac12$ becomes binding at a comparable value, so any attempt to
+enlarge $\Delta t$ will approach both limits at once. Beyond \eqref{eq:cfl-bound} the
+stencil would have to be centred on the departure point, at the cost of one moment
+matrix per discrete velocity (Remark~\ref{rem:origins}).
+
+\begin{definition}[Departure-point interpolation operator; \New]
+\label{def:interp}
+Using the same moment matrix $\bm M_i$ as in \eqref{eq:moments}, define for each
+discrete velocity $q$
+\begin{equation}
+\bm M_i\,\bm\Psi^{q}_i=\widetilde{\bm X}(\bm\delta_q)
+\equiv\bm X(\bm\delta_q)\!\cdot\!\bm H_i ,
+\qquad
+w^{q}_{ji}=\bm W_{ji}\cdot\bm\Psi^{q}_i ,
+\label{eq:interp-op}
+\end{equation}
+and take as the streaming step
+\begin{equation}
+f_q(\bm r_i,t+\Delta t)
+=f^{\rm post}_{q,i}
++\sum_{j\in\mathcal N_i}\bigl(f^{\rm post}_{q,j}-f^{\rm post}_{q,i}\bigr)w^{q}_{ji}
+=w^{q}_{\rm cen}f^{\rm post}_{q,i}+\sum_{j\in\mathcal N_i}w^{q}_{ji}f^{\rm post}_{q,j},
+\label{eq:stream}
+\end{equation}
+where $w^{q}_{\rm cen}\equiv1-\sum_{j}w^{q}_{ji}$.
+\end{definition}
+
+The form of the right-hand side follows from applying \eqref{eq:taylor} to the
+departure point, $\phi(\bm r^{*}_q)-\phi_i=\bm X(\bm\delta_q)\cdot\bm D\phi|_i$, and
+comparing with \eqref{eq:Lop}. Consistency of the preconditioning is guaranteed by
+using the same $\bm H_i$ in $\widetilde{\bm X}(\bm\delta_q)$ as in
+$\widetilde{\bm X}_{ji}$.
+
+\subsection{Polynomial reproduction}
+
+\begin{theorem}[Exact reproduction at the departure point; \New]
+\label{thm:exact}
+Let $\bm M_i$ be non-singular, let $\bm X$ contain all monomials of total degree at
+most $m$, and let $\bm\Psi^{q}_i$ solve \eqref{eq:interp-op}. Then for every polynomial
+$P$ of total degree at most $m$,
+\begin{equation*}
+P_i+\sum_{j\in\mathcal N_i}(P_j-P_i)\,w^{q}_{ji}=P(\bm r_i+\bm\delta_q),
+\end{equation*}
+exactly, with no truncation error.
+\end{theorem}
+
+\begin{proof}
+For a polynomial of total degree at most $m$ the truncated expansion \eqref{eq:taylor}
+is an identity rather than an approximation, so that $P_j-P_i=\bm X_{ji}\cdot\bm DP|_i$.
+Hence
+\begin{align*}
+\sum_{j}(P_j-P_i)w^{q}_{ji}
+&=\sum_{j}\bigl(\bm X_{ji}\cdot\bm DP|_i\bigr)\bigl(\bm W_{ji}\cdot\bm\Psi^{q}_i\bigr)
+=\bm DP|_i\cdot\Bigl(\sum_{j}\bm X_{ji}\otimes\bm W_{ji}\Bigr)\bm\Psi^{q}_i\\
+&=\bm DP|_i\cdot\bm M_i\bm\Psi^{q}_i
+=\bm DP|_i\cdot\bm X(\bm\delta_q)
+=P(\bm r_i+\bm\delta_q)-P(\bm r_i),
+\end{align*}
+the last step again by the exactness of \eqref{eq:taylor} for polynomials of degree at
+most $m$. Adding $P_i$ gives the result. The preconditioned form is equivalent, since
+both sides of the linear system are multiplied by the same diagonal matrix.
+\end{proof}
+
+\begin{corollary}[Exact preservation of constants]
+\label{cor:const}
+Taking $P\equiv\text{const}$ gives $P_j-P_i\equiv0$, so that \eqref{eq:stream} returns
+$f_{q,i}$ identically. A uniform field therefore generates no spurious mass source.
+This follows from the difference form $(\cdot)_{ji}$ alone and requires no additional
+partition-of-unity constraint on the weights.
+\end{corollary}
+
+\begin{corollary}[Degenerate zero-displacement limit]
+\label{cor:zero}
+If $\bm\delta_q=\bm 0$ then $\bm X(\bm 0)=\bm 0$, hence $\bm\Psi^{q}_i=\bm 0$ and
+$w^{q}_{ji}\equiv0$, and \eqref{eq:stream} reduces to the identity exactly. This
+provides the sharpest available unit test of the assembled operator (rung L5a of
+\S\ref{sec:ladder}).
+\end{corollary}
+
+\begin{remark}[The operator is approximating, not interpolating]
+\label{rem:noninterp}
+Lagrange interpolation reproduces nodal values exactly: a departure point coinciding
+with a node returns that node's value. The operator of Definition~\ref{def:interp} does
+not have this property, since it enforces polynomial consistency rather than nodal
+collocation, in common with moving least squares approximation. Consequently the
+condition ``the scheme must recover the standard lattice Boltzmann method when the
+departure point coincides with a node'' is \emph{not} a valid verification criterion
+for this scheme. The only exact degeneracy is Corollary~\ref{cor:zero}.
+\end{remark}
+
+\subsection{Truncation error and the amplification constant}
+
+For a general smooth field, $f_j-f_i=\bm X_{ji}\cdot\bm Df|_i+R_{ji}$ with
+$R_{ji}=O(|\rji|^{m+1})$. Theorem~\ref{thm:exact} then gives
+\begin{equation}
+\varepsilon^{q}_i
+=\Bigl|\sum_{j}R_{ji}w^{q}_{ji}-R(\bm\delta_q)\Bigr|
+\le\Lambda^{q}_i\max_{j}|R_{ji}|+|R(\bm\delta_q)|
+=O\!\bigl(\Lambda^{q}_i\,h_i^{\,m+1}\bigr),
+\label{eq:trunc}
+\end{equation}
+where
+\begin{equation}
+\boxed{\ \Lambda^{q}_i\equiv\sum_{j\in\mathcal N_i}\bigl|w^{q}_{ji}\bigr|\ }
+\label{eq:lebesgue}
+\end{equation}
+plays the role of a Lebesgue constant for the operator \New. It bounds both the error
+amplification in \eqref{eq:trunc} and the growth of the streaming step in the maximum
+norm, since \eqref{eq:stream} gives
+$|f^{\rm new}|\le\bigl(|w^{q}_{\rm cen}|+\Lambda^{q}_i\bigr)\max_j|f_j|$. The quantity
+$\Lambda^{q}_i$ is to be computed and reported for every node and every discrete
+velocity during preprocessing; it is the second diagnostic, alongside the condition
+number, on which acceptance of a stencil is conditioned.
+
+\subsection{Von Neumann amplification and the stability criterion}
+\label{sec:vn}
+
+Substituting a plane wave $f=\exp(\mathrm i\bm k\cdot\bm r)$ into \eqref{eq:stream}
+gives the amplification factor
+\begin{equation}
+G_q(\bm k)=1+\sum_{j\in\mathcal N_i}
+\Bigl(e^{\mathrm i\bm k\cdot\rji}-1\Bigr)w^{q}_{ji},
+\label{eq:amp}
+\end{equation}
+whose exact counterpart is the pure phase shift $e^{\mathrm i\bm k\cdot\bm\delta_q}$,
+of unit modulus. Hence:
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\New\ \textbf{Stability criterion for the streaming step.}
+\begin{equation}
+\max_{|\bm k|\le k_{\rm Ny}}\bigl|G_q(\bm k)\bigr|\le1+\epsilon_{\rm tol},
+\qquad q=0,\dots,18,
+\qquad k_{\rm Ny}=\pi/s_i .
+\label{eq:vn-crit}
+\end{equation}
+The criterion is evaluated per node during preprocessing. A node violating it must
+have its polynomial order reduced or its stencil enlarged. The phase error
+$\arg G_q(\bm k)-\bm k\cdot\bm\delta_q$ is recorded separately as the dispersion
+diagnostic.
+}}
+\end{center}
+
+\begin{remark}[Relation to the source]
+Criterion \eqref{eq:vn-crit} is an adaptation of steps 3 and 4 of the stencil
+optimisation algorithm of~\cite[\S 4]{KL2021}, in which the amplitude response of the
+\emph{differential} operators is evaluated at $n_k=16$ wavenumbers up to the Nyquist
+limit \cite[Eqs.~(13a)--(13c)]{KL2021} and the stencil is accepted only while
+$\max(A^{x},A^{y},A^{L})\le1.01$. The present criterion replaces the effective
+wavenumber of a derivative by the amplification factor of a translation; the tolerance
+$\epsilon_{\rm tol}=0.01$ and the sampling $n_k=16$ are retained from the source. The
+same Fourier machinery underlies the resolving-power analysis
+of~\cite{Broadley2025,Broadley2026}, which provides the natural route to a future
+implicit (compact) variant.
+\end{remark}
+
+\subsection{Local affine rescaling for anisotropic node distributions}
+\label{sec:affine}
+
+Near a wall the node spacing normal to the surface is much smaller than the tangential
+spacing, so the stencil is a flattened ellipsoid in physical space and $\bm M_i$ is
+poorly conditioned. Let
+$\bm S_i=\operatorname{diag}\bigl(h_{x,i}^{-1},h_{y,i}^{-1},h_{z,i}^{-1}\bigr)$ and
+assemble and solve the system in the rescaled coordinates
+$\tilde{\bm r}_{ji}=\bm S_i\rji$.
+
+\begin{theorem}[Affine invariance of polynomial consistency; \New]
+\label{thm:affine}
+The space $\mathbb P_m$ of polynomials of total degree at most $m$ is invariant under
+any invertible linear map. Consequently, enforcing degree-$m$ consistency in
+$\tilde{\bm r}$ is equivalent to enforcing degree-$m$ consistency in $\bm r$.
+\end{theorem}
+
+\begin{proof}
+Let $A$ be invertible and $P\in\mathbb P_m$. Then $P\circ A$ is a polynomial with
+$\deg(P\circ A)=\deg P$, since each monomial of total degree $n$ maps to a linear
+combination of monomials of total degree $n$. Theorem~\ref{thm:exact} applied to the
+point set $\{A\rji\}$ with right-hand side $\bm X(A\bm\delta_q)$ is therefore
+equivalent to the same statement for $\{\rji\}$ and $\bm X(\bm\delta_q)$.
+\end{proof}
+
+\begin{remark}[Implementation consequences]
+Interpolation weights are dimensionless, so no inverse scaling of the weights is
+required; it suffices to evaluate the right-hand side as
+$\widetilde{\bm X}(\bm S_i\bm\delta_q)$. Weights of differential operators do carry
+dimensions and must be rescaled by the corresponding powers of $\bm S_i$. The Hermite
+ABFs \eqref{eq:hermiteABF} extend to three dimensions as
+\begin{equation}
+W^{\alpha}_{ji}=\frac{\psi(|\tilde{\bm r}_{ji}|)}{\sqrt{2^{\,a+b+c}}}\,
+H_a\!\left(\frac{\tilde x_{ji}}{\sqrt2}\right)
+H_b\!\left(\frac{\tilde y_{ji}}{\sqrt2}\right)
+H_c\!\left(\frac{\tilde z_{ji}}{\sqrt2}\right),
+\label{eq:hermite3d}
+\end{equation}
+for $\bm X$-entries with multi-index $\alpha=(a,b,c)$; this is the direct dimensional
+extension of \cite[Eq.~(10)]{KL2021} \New. Throughout, a Greek superscript indexes the
+\emph{basis}, running over $1,\dots,p$, while the Latin $q$ reserved in
+\S\ref{sec:interp} indexes the \emph{discrete velocity}; the two are unrelated.
+\end{remark}
+
+%========================================================================
+\section{A generalised moving least squares control formulation}
+\label{sec:mls}
+
+The construction of \S\ref{sec:interp} uses the LABFM machinery, but nothing in
+Theorems~\ref{thm:exact} and~\ref{thm:affine}, in Corollaries~\ref{cor:const}
+and~\ref{cor:zero}, or in the diagnostics \eqref{eq:lebesgue} and \eqref{eq:vn-crit}
+requires it: they apply to any weight construction that enforces polynomial
+consistency on a node cloud. The most established such alternative is moving least
+squares~\cite{Lancaster1981} in its generalised, node-centred
+form~\cite{Mirzaei2012,Trask2016}. This section specifies that alternative in a form
+that is directly comparable, term by term, so that the selection between the two can
+be made by measurement rather than by assertion.
+
+\subsection{Definition}
+
+Let $\bm q(\bm z)=[1,\,z_x,\,z_y,\,z_z,\,z_x^2/2,\,\dots]^{\mathsf T}$ be the complete
+polynomial basis of total degree at most $m$, of dimension
+$P=\binom{m+3}{3}=p_{\rm 3D}+1$, and let $\theta_{ji}=\theta(|\rji|/h_i)$ be a
+compactly supported kernel. Write $\bm q_{ji}=\bm q(\bm S_i\rji)$ with $\bm S_i$ the
+local affine scaling of \S\ref{sec:affine}. Define the Gram matrix and the shape
+functions evaluated at the departure point,
+\begin{equation}
+\bm A_i=\sum_{j\in\mathcal N_i}\theta_{ji}\,\bm q_{ji}\bm q_{ji}^{\mathsf T},
+\qquad
+\Phi^{q}_{ji}=\bm q(\bm S_i\bm\delta_q)^{\mathsf T}\bm A_i^{-1}\theta_{ji}\bm q_{ji}.
+\label{eq:mls}
+\end{equation}
+
+\begin{remark}[Why the kernel is centred on the node]
+In classical moving least squares the kernel is centred on the \emph{evaluation}
+point, so that $\bm A$ must be reassembled and refactorised for every target. With
+nineteen targets per node this would forfeit the structural advantage identified in
+Remark~\ref{rem:shared}. Centring the kernel on node $i$ instead --- the generalised
+or fixed-kernel variant~\cite{Mirzaei2012,Trask2016} --- makes $\bm A_i$
+target-independent, so that a single factorisation serves all nineteen departure
+points, exactly as $\bm M_i$ does. Only this variant constitutes a fair control.
+\end{remark}
+
+Because $1\in\operatorname{span}\bm q$, the shape functions form a partition of unity,
+$\sum_j\Phi^{q}_{ji}=1$, and the streaming step may be written in the same difference
+form as \eqref{eq:stream} with
+\begin{equation}
+w^{q,\mathrm{MLS}}_{ji}=\Phi^{q}_{ji}.
+\label{eq:mls-weights}
+\end{equation}
+The diagnostics \eqref{eq:lebesgue} and \eqref{eq:amp} therefore apply verbatim to
+both arms, with identical definitions.
+
+\subsection{Identical formal order}
+
+\begin{theorem}[Equivalence of polynomial reproduction; \New]
+\label{thm:mls}
+Let $\bm A_i$ be non-singular. Then for every polynomial $P$ of total degree at most
+$m$,
+\begin{equation*}
+\sum_{j\in\mathcal N_i}\Phi^{q}_{ji}\,P(\bm r_j)=P(\bm r_i+\bm\delta_q),
+\end{equation*}
+exactly. Consequently the operator \eqref{eq:mls-weights} has the same leading
+truncation error $O(h_i^{\,m+1})$ as the operator of Definition~\ref{def:interp}.
+\end{theorem}
+
+\begin{proof}
+Since $\bm q$ spans $\mathbb P_m$ in the scaled variable, there exists $\bm c$ with
+$P(\bm r_j)=\bm q_{ji}^{\mathsf T}\bm c$ for all $j$, and
+$P(\bm r_i+\bm\delta_q)=\bm q(\bm S_i\bm\delta_q)^{\mathsf T}\bm c$. Then
+\begin{equation*}
+\sum_j\Phi^{q}_{ji}P(\bm r_j)
+=\bm q(\bm S_i\bm\delta_q)^{\mathsf T}\bm A_i^{-1}
+\sum_j\theta_{ji}\bm q_{ji}\bm q_{ji}^{\mathsf T}\bm c
+=\bm q(\bm S_i\bm\delta_q)^{\mathsf T}\bm A_i^{-1}\bm A_i\bm c
+=\bm q(\bm S_i\bm\delta_q)^{\mathsf T}\bm c . \qedhere
+\end{equation*}
+\end{proof}
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\textbf{Consequence for the contribution statement.} Theorem~\ref{thm:mls} shows that
+polynomial consistency of degree $m$, and hence interpolation of order $m+1$, is a
+property of the consistency constraint and not of the LABFM basis. Any claim that
+high-order consistency on a node cloud is specific to LABFM is therefore unfounded and
+must not be made. What existing meshless lattice Boltzmann formulations lack is not
+the capability but the realisation: the highest polynomial augmentation reported
+in~\cite{Strzelczyk2023} is degree four, in two dimensions.
+}}
+\end{center}
+
+\subsection{The single structural difference: conditioning}
+
+Stack the rows $\bm q_{ji}^{\mathsf T}$ into $\bm Q\in\mathbb R^{N_i\times P}$ and let
+$\bm\Theta=\operatorname{diag}(\theta_{ji})$. Then
+\begin{equation}
+\bm A_i=\bm Q^{\mathsf T}\bm\Theta\bm Q
+=\bigl(\bm\Theta^{1/2}\bm Q\bigr)^{\mathsf T}\bigl(\bm\Theta^{1/2}\bm Q\bigr),
+\qquad\text{whence}\qquad
+\kappa_2(\bm A_i)=\kappa_2\!\bigl(\bm\Theta^{1/2}\bm Q\bigr)^{2}.
+\label{eq:gram}
+\end{equation}
+The moving least squares system is a Gram matrix, formed by normal equations, and its
+condition number is therefore the \emph{square} of that of the underlying weighted
+design matrix. By contrast, stacking $\widetilde{\bm X}_{ji}^{\mathsf T}$ into
+$\bm X\in\mathbb R^{N_i\times p}$ and $\bm W_{ji}^{\mathsf T}$ into $\bm W$,
+\begin{equation}
+\bm M_i=\bm X^{\mathsf T}\bm W ,
+\label{eq:petrov}
+\end{equation}
+a product of two \emph{distinct} matrices --- a Petrov--Galerkin rather than a Galerkin
+construction --- which is not a Gram matrix and involves no squaring. In the language of
+\S\ref{sec:structure} the two arms are the two selectors of \eqref{eq:selector}, acting
+on one and the same constraint set \eqref{eq:underdet}; by
+Proposition~\ref{prop:degenerate} they even coincide when $N_i=p$, so the entire
+difference between them lies in how the surplus $N_i-p$ degrees of freedom are spent. The Hermite
+ABFs~\eqref{eq:hermiteABF} are moreover orthogonal with respect to a Gaussian weight
+while $\bm X$ consists of monomials, so that $\bm M_i$ is close to block diagonal for
+near-uniform clouds; the corresponding structure, including entries that vanish to
+machine precision by parity, is displayed in~\cite[Fig.~5]{KLN2020}.
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\New\ \textbf{Hypothesis H1 (to be tested at G1).} On the production node cloud and at
+matched $m$, $h/s$, kernel and scaling,
+$\kappa(\bm A_i)\sim\kappa(\bm M_i)^{2}$, with the gap widening as $m$ increases; and
+the largest admissible $m$ is correspondingly larger for the LABFM arm.
+
+\smallskip
+\textbf{H1 is the only structural discriminator between the two arms that survives
+Theorem~\ref{thm:mls}.} If it is not supported by measurement, there is no theoretical
+ground for preferring LABFM over moving least squares in this application.
+}}
+\end{center}
+
+\subsection{Properties that are not discriminators}
+
+The following are shared by both arms and must not be advanced as reasons to prefer
+either:
+\begin{enumerate}[label=(\alph*)]
+\item formal order of accuracy (Theorem~\ref{thm:mls});
+\item a single factorisation per node serving all nineteen departure points
+(Remark~\ref{rem:shared} for LABFM; the node-centred kernel for MLS);
+\item automatic one-sided operators where the support is incomplete, provided the
+local matrix remains non-singular;
+\item exact preservation of constants (Corollary~\ref{cor:const} by the difference
+form for LABFM; the partition of unity for MLS);
+\item applicability of the diagnostics $\Lambda^{q}_i$ and $\max_{\bm k}|G_q(\bm k)|$.
+\end{enumerate}
+Preprocessing cost in fact favours the control arm: $\bm A_i$ is symmetric positive
+definite and admits a Cholesky factorisation at $O(P^{3}/3)$, whereas $\bm M_i$ is
+non-symmetric and requires $O(2p^{3}/3)$.
+
+\subsection{Fairness conditions}
+\label{sec:fairness}
+
+The comparison is invalid unless all of the following hold. They are stated here so
+that a failure to satisfy them is detectable in review.
+\begin{enumerate}[label=(F\arabic*)]
+\item Identical node cloud, identical stencil membership, identical support radius
+$2h_i$ and identical $h/s$.
+\item Both arms use the local affine rescaling $\bm S_i$ of \S\ref{sec:affine}.
+\item Both arms use a shifted and scaled polynomial basis: the row preconditioning
+\eqref{eq:precond} for LABFM, and the scaled argument $\bm q(\bm S_i\rji)$ for MLS.
+Comparing a preconditioned LABFM system against an unscaled MLS system is a straw man.
+\item Identical kernel, $\psi=\theta=$ Wendland C2.
+\item Identical diagnostics, computed by the same code path: $\kappa$, the residual of
+the local solve, $\Lambda^{q}_i$, $\max_{\bm k}|G_q(\bm k)|$ at $n_k=16$, and the
+monomial reproduction residual of Theorem~\ref{thm:exact}
+respectively Theorem~\ref{thm:mls}.
+\item Identical arithmetic precision and identical factorisation library.
+\end{enumerate}
+
+\subsection{Decision rule}
+\label{sec:decision}
+
+At gate G1 both arms are run on the production node cloud and the following are
+reported for each: the largest $m$ admitting $\kappa<10^{10}$; $\kappa(m)$ at the
+target order; $\Lambda^{q}_i$ and $\max_{\bm k}|G_q|$ distributions; the factorisation
+cost; and the stencil radius in index units. Then
+\begin{itemize}
+\item if the LABFM arm admits a larger $m$, or exhibits a condition-number advantage of
+at least two orders at the target $m$, adopt LABFM; H1 is supported;
+\item if the two arms are comparable, adopt the control arm --- it is simpler, cheaper
+to factorise and more widely implemented --- and drop the LABFM designation;
+\item if the control arm is superior, adopt it.
+\end{itemize}
+In all three outcomes the theory of \S\ref{sec:interp} is unaffected: Theorems
+\ref{thm:exact} and \ref{thm:affine}, Corollaries \ref{cor:const} and \ref{cor:zero},
+the amplification constant \eqref{eq:lebesgue} and the stability criterion
+\eqref{eq:vn-crit} hold verbatim for either construction, and the contribution
+statement of \S1.3 is method-agnostic.
+
+%========================================================================
+\section{Verification ladder}
+\label{sec:ladder}
+
+Each rung reproduces either a published result or an identity proved above. A rung must
+pass before the next is attempted.
+
+\begin{widetable}
+\begin{longtable}{@{}P{1.05cm}P{3.3cm}P{11.35cm}@{}}
+\toprule
+\textbf{Rung} & \textbf{Target} & \textbf{Pass condition} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Rung} & \textbf{Target} & \textbf{Pass condition} \quad\emph{(cont.)} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{3}{r@{}}{\footnotesize\emph{continued on next page}}\\
+\endfoot
+\bottomrule
+\endlastfoot
+L0 & \cite[Eqs.~(15),(16)]{KLN2020} & Basis-dimension generator returns
+$\{5,14,27,44\}$ in two dimensions for $m=2,4,6,8$ and $\{3,9,19,34,55\}$ in three
+dimensions for $m=1,\dots,5$. \\
+L0b & Eq.~\eqref{eq:parity} & On a uniform Cartesian cloud the parity defect
+\eqref{eq:parity-defect} satisfies $\eta_i\lesssim10^{-14}$. Cheapest available test of
+the multi-index ordering and the Hermite recurrence; requires no solve. \\
+L1 & \cite[\S 4.1]{KLN2020} & Two dimensions, original conic ABFs, distribution noise
+$\varepsilon/s=0.5$, $h/s=2$, test function \cite[Eq.~(23)]{KLN2020}: gradient
+converges at order $m$ and the Laplacian at order $m-1$ for $m=2,4,6$.
+\textbf{The truncation of Remark~\ref{rem:truncation} must be applied} or the numbers
+will not match. \\
+L2 & \cite[\S 3.2]{KLN2020} & Two-dimensional critical ratios recovered with the
+\emph{original} ABFs: $(h/s)_{\rm crit}\approx\{0.75,1.15,1.60,2.10\}$ and
+$N_{\rm crit}\approx\{8,21,37,57\}$. Establishes the measurement procedure later
+applied to the Hermite construction (open items U1, U8). \\
+L3 & \cite[\S 3]{KL2021} & \emph{Negative test.} Three dimensions, original ABFs,
+$m=4$: $\bm M$ of size $34$ with rank $33$, independently of the node distribution. A
+full-rank result indicates an error in the ABF assembly, not an improvement. \\
+L4 & \cite[\S 3, Fig.~2]{KL2021} & Hermite ABFs reduce $\kappa(\bm M)$ by several
+orders of magnitude relative to the original ABFs, and restore full rank in three
+dimensions at $m=4$. \\
+L5a & Corollary~\ref{cor:zero} & $\bm\delta_q=\bm0$ yields $w^{q}\equiv0$ and an
+unchanged field to machine precision. \\
+L5b & Theorem~\ref{thm:exact} & All monomials of total degree at most $m$ reproduced at
+the departure point to a residual below $10^{-12}$. \\
+L5c & Corollary~\ref{cor:const} & A uniform field is unchanged after streaming in all
+nineteen directions. \\
+L5d & Theorem~\ref{thm:mls} & \emph{Control arm.} The moving least squares operator
+\eqref{eq:mls-weights} reproduces all monomials of total degree at most $m$ at the
+departure point to a residual below $10^{-12}$, and satisfies
+$\sum_j\Phi^{q}_{ji}=1$ to machine precision. \\
+L5e & Proposition~\ref{prop:degenerate} & With $N_i=p$ the weights equal
+$\bm X^{-\mathsf T}\bm C$ and are independent of the selector: both arms, and any
+choice of ABF, must agree bitwise, and in one dimension must reproduce the Lagrange
+weights on $m+1$ points. Validates the assembly without exercising the basis at all. \\
+L5f & Proposition~\ref{prop:gauge} & \emph{Gauge test.} Rebuilding $\bm X$ and $\bm C$
+about a displaced origin $\bm r_0=\bm r_i+\varepsilon\bm n$, $\varepsilon\sim h$,
+with $\bm S$ and $\mathcal N_i$ unchanged, must leave $\bm w$ invariant to a relative
+$10^{-10}$. Isolates errors in the monomial assembly and multi-index ordering, which
+rung L5b detects only at the highest degrees. \\
+L6 & \cite[\S 4.2, Table 1]{KLN2020} & Trend of the Laplacian stability limit with $h/s$ and
+$m$ recovered; corroborates the ABF implementation. \\
+L7 & Eq.~\eqref{eq:vn-crit} & On the production node cloud,
+$\max_{\bm k}|G_q(\bm k)|\le1.01$ for all nodes and all $q$. \\
+L7b & \S\S\ref{sec:project-stencil}, \ref{sec:boundary} &
+\emph{Boundary admissibility.} On every one-sided and nearly one-sided P6/31 cloud,
+report the three numerical ranks, equilibrated rcond, $\lambda_0$, $T_7$, all final-solve
+gates and the direction-specific $\Lambda_q$; then measure
+$\max_{\bm k}|G_q(\bm k)|$ for the assembled interpolation operator. Local gates settle
+constructibility, while the amplification test settles whether the derivative-instability
+result transfers; together they close open item U4. \\
+L8 & Hypothesis H1, \S\ref{sec:decision} & \emph{Head-to-head.} Both arms run on the
+production node cloud under the fairness conditions of \S\ref{sec:fairness}; the
+decision rule of \S\ref{sec:decision} is applied and its outcome recorded. \\
+\end{longtable}
+\end{widetable}
+
+%========================================================================
+\section{Open items}
+
+No item in this table may be used as an implementation assumption until it has been
+measured and the result written back into this document.
+
+\begin{widetable}
+\begin{longtable}{@{}P{0.8cm}P{3.5cm}P{11.4cm}@{}}
+\toprule
+\textbf{\#} & \textbf{Item} & \textbf{Why open, and how it is to be closed} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{\#} & \textbf{Item} & \textbf{Why open} \quad\emph{(cont.)} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{3}{r@{}}{\footnotesize\emph{continued on next page}}\\
+\endfoot
+\bottomrule
+\endlastfoot
+U1 & $(h/s)^{\rm 3D}_{\rm crit}$ & Not in the literature; \cite{KL2021} defers three
+dimensions. Measured on the production grid for $m=6$ with a metric-ball support:
+$\operatorname{rank}\bm X=75$--$80$ of $83$ at $h/s=1.5$ and $83$ at $h/s\ge1.6$
+($N_i=142$), so $(h/s)^{\rm 3D}_{\rm crit}\simeq1.6$ for a lattice cloud. Whether this
+constant enters a future full three-dimensional path depends on a selector that is not
+implemented. The current two-dimensional P6/31 selector is fully specified in
+\S\ref{sec:project-stencil} and does not assume this three-dimensional value. \New \\
+U2 & Unisolvency of structured lattice balls & \textbf{Closed, negatively.} The $123$-point radius-three lattice ball at $h/s=1.5$ attains
+$\operatorname{rank}\bm X=77$ of $83$; the singular spectrum has a hard gap
+($\sigma_{79}/\sigma_1=4.9\times10^{-8}$, $\sigma_{80}/\sigma_1=1.0\times10^{-17}$), so
+the deficiency is exact and not a threshold artefact. It occurs at mid-channel and at
+the flat upper wall as well as on the hill face, hence it is a property of the lattice
+ball and not of the metric. A sufficient design screen is the slicing count: the support
+must decompose into $m+1$ parallel slices holding at least
+$\dim\mathbb P_{m-\ell}^{2\rm D}=28,21,15,10,6,3,1$ points; this predicts the measured
+outcome at $h/s=1.5$, $1.6$ and $1.8$ correctly. \New \\
+U3 & Admissible bound on $\Lambda^{q}_i$ & No counterpart exists in the literature,
+which does not define an interpolation operator. Reference values are now available
+on a $25$-point in-plane support: $1.2$--$2.4$ in the interior, $3.0$ in the wall band; a
+rejected configuration reaches $3.5\times10^{4}$ and a ghost-fed one
+$1.2\times10^{3}$. The current P6/31 implementation uses a distinct,
+direction-independent hard gate $\lambda_0\le512$ in the compact tier and
+$\lambda_0\le4096$ in repair, while the actual direction-specific
+$\Lambda_i^q>6$ remains a warning rather than rejection. The admissible production
+bound on $\Lambda_i^q$ is therefore still open and must be fixed by the error and
+stability budget. Close jointly with rung L7 and U5. \\
+U4 & \textbf{Near-wall treatment} & \textbf{Partly closed at the local-algebra level.}
+The current selector uses no wall ghost: it clamps a physical seven-layer P6/31 cloud
+into the domain and fails closed unless the rank, equilibrated-rcond, $\lambda_0$ and
+three-solver gates of \S\ref{sec:project-stencil} pass. This addresses numerical
+constructibility for the audited grids and avoids treating the adverse result of
+\cite[\S 7.1]{KL2021} as a universal impossibility theorem. Still open are the global
+interpolation amplification spectrum, observed wall convergence over the supported grid
+family, and production physical validation. Close by rung L7b; until then, local gate
+success must not be reported as proof of wall-stable seventh-order production accuracy. \\
+U5 & Interpolation error against the lattice Boltzmann error floor & Determines whether
+raising the interpolation order changes the solution at all, given the saturation law
+of~\cite{Strzelczyk2023}. Close by an offline measurement on a converged field. \\
+U6 & Measured roofline position & Determines whether a reduction in operation count
+converts to wall-clock time. Close by profiling the existing kernel. \\
+U7 & Hypothesis H1: which weight construction & Theorem~\ref{thm:mls} removes order of
+accuracy as a discriminator, leaving conditioning \eqref{eq:gram} versus
+\eqref{eq:petrov} as the only structural difference. Close by rung L8 under the
+fairness conditions of \S\ref{sec:fairness}; the decision rule is \S\ref{sec:decision}.
+Until U7 is closed, the method designation in all external material is to be
+``consistency-based meshless departure-point interpolation'', not ``LABFM''. \\
+U8 & Critical ratio for the Hermite ABFs & The published critical values belong to the
+\emph{original} ABFs, which the production path does not use; only recommended
+operating values with an unquantified margin are published for the Hermite
+construction (\S\ref{sec:sampling}). The present P6/31 implementation bypasses a fixed
+published ratio by trying finite $h$ and anisotropy ladders and accepting only the
+measured matrix gates; that is an implementation policy, not a determination of a
+universal critical ratio. Close together with U1, in two dimensions first so that rung
+L2 provides a validated procedure. \\
+U9 & Whether the extrusion symmetry survives & The weight table presumes a node cloud
+that is a uniform extrusion along the homogeneous direction. Relaxing this in Stage~2
+multiplies the table by the number of nodes in that direction. Close by deciding, before
+Stage~2, whether variable resolution is wanted in the homogeneous direction at all. \
+\end{longtable}
+\end{widetable}
+
+%========================================================================
+\section{Interface with the existing solver}
+
+\begin{itemize}
+\item A compile-time switch selects the present streaming path; it is mutually
+exclusive with the existing streaming paths, enforced at compile time.
+\item No existing streaming, collision or infrastructure module is modified.
+\item The collision operator, the forcing scheme, the statistics, the file
+input/output, the halo exchange, the mass correction and its monitoring are reused
+unchanged.
+\item \textbf{Ghost storage is retained, but it is not part of a LABFM cloud.}
+The incumbent wall boundary, ITB/GILBM streaming and statistics-window contracts still
+require their existing ghost layers and must not be dismantled. Independently, the
+P6/31 selector of \S\ref{sec:project-stencil} admits canonical physical IDs only and
+clamps its one-sided stencil into the domain. If a finite-difference hybrid in the sense
+of \cite[Table 1]{KL2021} is adopted later, the interface between that strip and the
+meshless interior must be specified as a separate method change before any production
+run is submitted.
+\item The stencil is centred on the arrival node, which restricts the time step through
+Proposition~\ref{prop:cfl}. Any change to the Courant number must be checked against
+both that bound and the relaxation-time bound.
+\item The scheme is specified for a single global time step. Local time stepping is
+out of scope.
+\end{itemize}
+
+%========================================================================
+\appendix
+\section{Provenance table}
+\label{app:prov}
+
+\begin{widetable}
+\begin{longtable}{@{}P{3.9cm}P{4.45cm}P{7.3cm}@{}}
+\toprule
+\textbf{This report} & \textbf{Source} & \textbf{Content} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{This report} & \textbf{Source} & \textbf{Content} \quad\emph{(cont.)} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{3}{r@{}}{\footnotesize\emph{continued on next page}}\\
+\endfoot
+\bottomrule
+\endlastfoot
+\eqref{eq:X}, \eqref{eq:D} & \cite[Eqs.~(1),(2)]{KLN2020}, \cite[Eqs.~(1),(2)]{KL2021}
+& Monomial and derivative vectors \\
+\eqref{eq:taylor} & \cite[Eq.~(3)]{KLN2020} & Compact Taylor expansion \\
+\eqref{eq:Lop} & \cite[Eq.~(4)]{KLN2020}, \cite[Eq.~(3)]{KL2021} & General discrete
+operator; $\bm C^{d}$ from \cite[Eq.~(5)]{KLN2020}, \cite[Eq.~(4)]{KL2021} \\
+\eqref{eq:wPsi} & \cite[Eq.~(10)]{KLN2020}, \cite[Eq.~(5)]{KL2021} & ABF expansion of
+the weights \\
+\eqref{eq:moments} & \cite[Eqs.~(13),(14)]{KLN2020}, \cite[Eqs.~(6),(7)]{KL2021} &
+Moment matrix and local system \\
+\eqref{eq:p} & \cite[Eqs.~(15),(16)]{KLN2020} & Basis dimension in two and three
+dimensions \\
+\eqref{eq:origABF} & \cite[Eq.~(19)]{KLN2020} & Original ABFs \\
+\eqref{eq:hermiteABF} & \cite[Eqs.~(10),(11)]{KL2021} & Hermite ABFs \\
+\eqref{eq:precond} & \cite[Eq.~(9)]{KL2021} & Row preconditioning by powers of $h$ \\
+\S\ref{sec:sampling} table & \cite[\S 3.2]{KLN2020}, \cite[\S\S 4, 5]{KL2021} &
+Critical (original ABFs) and recommended (Hermite) stencil ratios; stencil optimisation \\
+\S\ref{sec:boundary} & \cite[\S 4.1]{KLN2020}, \cite[\S 7.1, Table 1,
+Eq.~(24), Appendix A]{KL2021} & Boundary treatment; the 2021 retraction of the 2020
+one-sided claim and the finite-difference hybrid \\
+\midrule
+\S\ref{sec:project-stencil},
+\eqref{eq:mandatory-window}--\eqref{eq:T7-selector} & Current project sources:
+\texttt{labfm\_stencil.h}, \texttt{labfm\_solve.h} & Two-dimensional P6/31-point
+candidate retention, mandatory template/QRCP membership, anisotropic scaling, rank and
+rcond gates, and compact-first repair selection; an implementation record, not a claim
+from the cited LABFM literature \\
+\eqref{eq:N3D} & \New & Three-dimensional neighbour count; geometric extension of the
+two-dimensional relation in \cite[\S 2]{KL2021} \\
+\eqref{eq:departure}--\eqref{eq:stream} & \New & Departure-point interpolation
+operator (Definition~\ref{def:interp}) \\
+Theorem~\ref{thm:exact} & \New & Exact polynomial reproduction at the departure point \\
+Corollaries~\ref{cor:const}, \ref{cor:zero} & \New & Constant preservation; zero
+displacement identity \\
+Remark~\ref{rem:noninterp} & \New & Approximating, not interpolating; invalidates a
+natural but incorrect regression test \\
+\eqref{eq:lebesgue} & \New & Amplification constant of the interpolation operator \\
+\eqref{eq:amp}, \eqref{eq:vn-crit} & \New, adapted from
+\cite[\S 4, Eqs.~(13a)--(13c)]{KL2021} & Von Neumann amplification and stability
+criterion for the streaming step \\
+Theorem~\ref{thm:affine}, \eqref{eq:hermite3d} & \New & Affine invariance; three
+dimensional Hermite ABFs \\
+Remark~\ref{rem:distribution}, \eqref{eq:measure} & \New & Distributional reading;
+$\bm C$ as the moment vector of a target distribution \\
+Remark~\ref{rem:truncation} & \cite[Appendix A]{KLN2020} & Truncation of the original
+ABFs for $m\ge4$, required to reproduce the published results \\
+Remark~\ref{rem:innerprod}, \eqref{eq:sampling-norm} & \New & Normalisation of the
+sampling condition \\
+\eqref{eq:parity}, \eqref{eq:parity-defect} & \New & Parity structure of the continuum
+limit; the parity defect as a leading sampling indicator \\
+\eqref{eq:underdet}, \eqref{eq:selector} & \New & Underdetermination of the weight
+system; the selector formulation unifying both arms \\
+Propositions~\ref{prop:degenerate}, \ref{prop:gauge}, Remarks~\ref{rem:surplus},
+\ref{rem:origins} & \New & Degenerate limit $N_i=p$; gauge freedom of the expansion
+origin and the two origins that are not free \\
+Remark~\ref{rem:threepoints}, Proposition~\ref{prop:cfl}, \eqref{eq:cfl-bound} & \New &
+Roles of $\bm r_i$, $\bm r_j$, $\bm r^{*}_q$; Courant bound for a node-centred stencil \\
+\eqref{eq:mls} & \cite{Lancaster1981,Mirzaei2012,Trask2016} & Moving least squares;
+node-centred (generalised) kernel variant \\
+\eqref{eq:mls-weights}, Theorem~\ref{thm:mls} & \New & Departure-point form of the
+control operator; equivalence of polynomial reproduction \\
+\eqref{eq:gram}, \eqref{eq:petrov}, H1 & \New & Gram versus Petrov--Galerkin
+conditioning; the sole surviving discriminator \\
+\S\S\ref{sec:fairness}, \ref{sec:decision} & \New & Fairness conditions and decision
+rule for the head-to-head comparison \\
+\end{longtable}
+\end{widetable}
+
+%========================================================================
+\section{A worked reading of \texorpdfstring{\cite[\S 3.1]{KLN2020}}{King et al. Sec. 3.1}}
+\label{app:tutorial}
+
+The construction of \cite[\S 3.1]{KLN2020} is short, and its brevity conceals what is
+being asserted. This appendix restates it in full, and then carries it out in closed
+form on the smallest non-trivial configuration, so that every claim can be checked by
+hand.
+
+\begin{center}
+\fbox{\parbox{0.95\textwidth}{
+\textbf{Precedence.} This appendix is a restatement, not a source. Sections
+\ref{app:statement}--\ref{app:dims} assert nothing that is not in
+\cite[\S\S 2, 3.1]{KLN2020}; their correctness consists in being a faithful
+transcription, so they cannot serve as the authority for their own content.
+\textbf{Where this appendix and \cite{KLN2020} disagree, \cite{KLN2020} governs and
+this appendix is in error.} Only the worked example of \S\S\ref{app:example},
+\ref{app:under}, Proposition~\ref{prop:dims} and the material marked \New{} stand on
+their own, and they function as checks on the transcription rather than substitutes for
+the source. The reader is expected to return to \cite{KLN2020} whenever rungs L1--L4 or
+L6 fail, whenever a parameter such as $h/s$ or $m$ is to be chosen, whenever the work is
+to be cited externally, and --- above all --- whenever a statement here is doubted.
+}}
+\end{center} The example also exhibits, in a setting where all quantities are explicit, three
+properties established abstractly in the main text: the cancellation of the basis
+functions in the degenerate case (Proposition~\ref{prop:degenerate}), the parity
+structure of the moment matrix \eqref{eq:parity}, and the necessity of a lower bound on
+$h/s$ (\S\ref{sec:sampling}).
+
+\subsection{The statement to be proved}
+\label{app:statement}
+
+Section~2 of \cite{KLN2020} establishes an identity rather than an approximation.
+Substituting the truncated Taylor expansion \eqref{eq:taylor} into the discrete operator
+\eqref{eq:Lop} gives \cite[Eq.~(7)]{KLN2020}
+\begin{equation}
+\mathcal L^{d}_i(\phi)
+=\underbrace{\Bigl(\sum_j x_{ji}w^{d}_{ji}\Bigr)}_{B^{d,1}_x}\frac{\partial\phi}{\partial x}
++\underbrace{\Bigl(\sum_j y_{ji}w^{d}_{ji}\Bigr)}_{B^{d,1}_y}\frac{\partial\phi}{\partial y}
++\underbrace{\Bigl(\sum_j \tfrac{x_{ji}^{2}}{2}w^{d}_{ji}\Bigr)}_{B^{d,2}_{xx}}
+\frac{\partial^{2}\phi}{\partial x^{2}}+\cdots
+\label{eq:momexpand}
+\end{equation}
+The discrete operator is therefore \emph{exactly} a linear combination of the
+derivatives at node $i$, in which the coefficient of each derivative is a moment of the
+weights. Approximating a prescribed derivative is consequently not a question of
+choosing a good formula but of solving an algebraic problem: set the moment belonging
+to the desired derivative to unity and every other moment to zero. The moments that are
+required to vanish are precisely the error terms of the title of
+\cite[\S 3.1]{KLN2020}; this is the sense in which they are ``eliminated'', and the
+elimination is exact, not asymptotic.
+
+Smoothed particle hydrodynamics obtains its weights from a kernel derivative
+\cite[Eq.~(9)]{KLN2020} and therefore accepts whatever moments that kernel happens to
+possess; \cite{KLN2020} observes that the result ``is not particularly useful'', being
+of zero order. The contribution of \cite[\S 3.1]{KLN2020} is a constructive means of
+imposing the moments instead of inheriting them.
+
+\subsection{The construction}
+
+The obstruction is that the moment conditions are $p$ equations in $N_i$ unknowns and,
+as discussed in \S\ref{sec:structure}, are underdetermined whenever $N_i>p$. The device
+of \cite[\S 3.1]{KLN2020} is to \emph{parameterise} the weights rather than solve for
+them: by \eqref{eq:wPsi} the $N_i$ unknown weights are replaced by $p$ unknown
+coefficients multiplying $p$ prescribed functions of the separation. Substituting this
+parameterisation into the moment vector and extracting the coefficients from the sum
+produces a square system, \eqref{eq:moments}. The two forms of that system carry
+opposite intent and should not be conflated: \cite[Eq.~(12)]{KLN2020} maps a given
+$\bm\Psi$ to the moments it produces, whereas \cite[Eq.~(14)]{KLN2020} prescribes the
+moments and solves for $\bm\Psi$. Only the second is the method.
+
+\subsection{What the dimensions are free to be, and what fixes them}
+\label{app:dims}
+
+\cite[\S 3.1]{KLN2020} closes the construction with a sentence that is easy to read as
+bookkeeping:
+
+\begin{quote}
+``The above analysis imposes no constraint on the lengths of $X$, $W$, $C$, and the size
+of $M$, although for consistency between (13) and (14), we require $X$, $W$ and $C$ to
+be of equal length, and $M$ square.''
+\end{quote}
+
+\noindent It is not bookkeeping. Read carefully it separates a genuine design decision
+from two consequences of it, and it is worth unpacking because the freedom it does
+\emph{not} remove is the freedom the rest of this report depends on.
+
+\paragraph{The first clause is literally true.} Nothing in
+\eqref{eq:taylor}--\eqref{eq:moments} refers to a dimension. The moment expansion
+\eqref{eq:momexpand} has infinitely many terms; $\bm X$ and $\bm W$ are formally
+infinite sequences; the outer product is formally an infinite array. Truncation is
+\emph{imposed} at this point in the argument, not derived from anything preceding it.
+That is the content of ``imposes no constraint''.
+
+\paragraph{Of the three stated equalities, only one is a choice.} Write
+$n_X=|\bm X|$, $n_W=|\bm W|$, $n_C=|\bm C|$. Then $\bm M$ has shape $n_X\times n_W$,
+so $\bm M\bm\Psi$ lies in $\mathbb R^{n_X}$, and \eqref{eq:moments} equates it to
+$\bm C$. Hence
+\begin{equation}
+n_C=n_X\quad\text{is forced by the equation being well formed,}
+\label{eq:nCnX}
+\end{equation}
+and is not a modelling decision at all. The only genuine choice is $n_W$ against $n_X$,
+and setting $n_W=n_X\equiv p$ is what makes $\bm M$ square. The three lengths carry
+three different meanings, and it is their coincidence that is the design decision:
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Vector & Its length counts & Status \\
+\midrule
+$\bm X$ & the moment conditions imposed, i.e. the error terms annihilated & sets $p$ \\
+$\bm W$ & the free coefficients available in $\bm\Psi$ & \textbf{the choice} \\
+$\bm C$ & the values prescribed & forced, \eqref{eq:nCnX} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\noindent In words: \emph{one free coefficient per moment condition}. The squareness of
+$\bm M$ is the consequence, not the motive.
+
+\begin{proposition}[The two alternatives; \New]
+\label{prop:dims}
+Let $n_X=p$ and let $\bm M$ have full rank. Then
+\begin{enumerate}[label=(\roman*)]
+\item if $n_W>p$, the system \eqref{eq:moments} is underdetermined, its solution set is
+an affine subspace of dimension $n_W-p$, and \emph{every} member satisfies all $p$
+moment conditions; polynomial reproduction, and hence the order, is unaffected, but a
+further rule is required to select $\bm\Psi$;
+\item if $n_W<p$, the system is overdetermined and generically inconsistent; no
+$\bm\Psi$ satisfies all $p$ conditions, the unsatisfied moments survive in
+\eqref{eq:momexpand}, and the order falls.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+Immediate from the shape $p\times n_W$ of $\bm M$ and the rank hypothesis. For (i),
+membership of the solution set means $\bm M\bm\Psi=\bm C$ holds exactly, which is the
+definition of the moment conditions; Theorem~\ref{thm:exact} then applies verbatim. For
+(ii), a least-squares surrogate leaves a non-zero residual in at least one moment, and
+that moment multiplies its derivative in \eqref{eq:momexpand}.
+\end{proof}
+
+\begin{remark}[$n_W$ interpolates between two extremes]
+\label{rem:nW}
+Case (i) is not pathological; it is a family of admissible schemes that
+\cite{KLN2020} declines to enter. Its extreme is instructive. Since
+$\bm w=\bm W\bm\Psi$, the reachable weights lie in the column space of $\bm W$, of
+dimension $n_W$. At $n_W=p$ the ansatz determines $\bm w$ completely once $\bm C$ is
+given; at the opposite extreme $n_W=N_i$ with $\bm W$ invertible, the reachable set is
+all of $\mathbb R^{N_i}$ and the ansatz imposes \emph{nothing}, returning the bare
+underdetermined system \eqref{eq:underdet}. The choice $n_W=p$ therefore places LABFM at
+the minimal end of that range: the smallest parameterisation that still closes the
+system. Every intermediate value would introduce a second layer of arbitrariness on top
+of the selection already discussed in \S\ref{sec:structure}.
+\end{remark}
+
+\paragraph{Square is necessary, not sufficient.} The quoted sentence secures only the
+shape of $\bm M$. Its invertibility is a separate matter and is where the method
+actually fails in practice: through the sampling condition of \S\ref{sec:sampling}, and,
+in three dimensions with the original basis, through the unconditional rank deficiency
+of \S\ref{sec:abf}.
+
+\paragraph{A second restriction, which the sentence does not state.} Equality of the
+three lengths does not by itself determine $p$; \cite[Eqs.~(15),(16)]{KLN2020} do, and
+they admit only the values $2,5,9,14,\dots$ in two dimensions and $3,9,19,34,55,83$ in
+three. The reason is that $p$ must fall at the end of a complete degree. Truncating in
+mid-degree --- taking, in two dimensions, $\bm X=[x,\,y,\,x^{2}/2]$ with $p=3$ ---
+controls $B_{x}$, $B_{y}$ and $B_{xx}$ while leaving $B_{xy}$ and $B_{yy}$ free. Since
+$B^{(n)}\sim h^{\,n-l}$, those surviving second moments contribute at $O(h)$ to a first
+derivative where a complete truncation would have left $O(h^{2})$: the order drops, and
+it drops \emph{anisotropically}, a field varying along $x$ retaining an accuracy that a
+field varying along $y$ does not. Equivalently, $\operatorname{span}\{1,x,y,x^{2}\}$ is
+not invariant under rotation of the axes whereas $\mathbb P_2$ is, so the operator would
+depend on an orientation that is arbitrary on a body-fitted curvilinear grid. This is
+enforced structurally in the implementation of \S\ref{sec:abf}: the multi-index
+enumeration loops over complete degrees, so a mid-degree truncation cannot be expressed.
+
+\paragraph{What remains free.} The sentence locks the ansatz dimension to the constraint
+count. It says nothing about $N_i$, and $N_i$ is not locked: the necessary condition is
+only $N_i>p$, and the surplus $N_i-p$ is precisely the freedom exploited in
+\S\ref{sec:structure} and contested between the two arms of \S\ref{sec:mls}. The
+division is therefore sharp, and worth stating as the summary of this subsection:
+\emph{the number of unknowns in the parameterisation is fixed by the number of
+conditions; the number of data points is not.}
+
+\subsection{A minimal example}
+\label{app:example}
+
+Let the problem be one-dimensional with $m=2$, so that
+$\bm X_{ji}=\bigl[x_{ji},\,x_{ji}^{2}/2\bigr]^{\mathsf T}$ and $p=m=2$; let node $i$ lie
+at $x=0$ and let its neighbours lie at $x=\pm s$. Then
+\begin{equation}
+\bm X_{j_1 i}=\Bigl[s,\ \tfrac{s^{2}}{2}\Bigr]^{\mathsf T},
+\qquad
+\bm X_{j_2 i}=\Bigl[-s,\ \tfrac{s^{2}}{2}\Bigr]^{\mathsf T},
+\qquad
+\det\bm X=s^{3}\neq0 ,
+\label{eq:exX}
+\end{equation}
+so the moment conditions $\bm X^{\mathsf T}\bm w=\bm C$ possess a unique solution for
+every right-hand side. Written out, they are
+\begin{equation}
+s\,(w_1-w_2)=C_1,
+\qquad
+\tfrac{s^{2}}{2}\,(w_1+w_2)=C_2 .
+\label{eq:excond}
+\end{equation}
+
+\paragraph{First derivative.} Setting $\bm C=[1,0]^{\mathsf T}$, the second of
+\eqref{eq:excond} forces $w_2=-w_1$ --- this is the elimination of the $\phi''$ error
+term --- whence $w_1=1/2s$ and $w_2=-1/2s$, and
+\begin{equation}
+\mathcal L^{x}_i(\phi)=\frac{\phi_{j_1}-\phi_i}{2s}-\frac{\phi_{j_2}-\phi_i}{2s}
+=\frac{\phi(s)-\phi(-s)}{2s}.
+\label{eq:excd1}
+\end{equation}
+
+\paragraph{Second derivative.} Setting $\bm C=[0,1]^{\mathsf T}$, the first of
+\eqref{eq:excond} forces $w_1=w_2$ --- the elimination of the $\phi'$ error term ---
+whence $w_1=w_2=1/s^{2}$, and
+\begin{equation}
+\mathcal L^{L}_i(\phi)=\frac{\phi_{j_1}-\phi_i}{s^{2}}+\frac{\phi_{j_2}-\phi_i}{s^{2}}
+=\frac{\phi(s)-2\phi(0)+\phi(-s)}{s^{2}}.
+\label{eq:excd2}
+\end{equation}
+
+The machinery of \cite[\S 3.1]{KLN2020} thus returns the classical central and second
+differences. This is the expected outcome and is worth stating explicitly, because it
+identifies what the method generalises: LABFM is a procedure for constructing, on an
+arbitrary node distribution, the object that the moment conditions define uniquely on a
+uniform one.
+
+\subsection{The superscript \texorpdfstring{$d$}{d}: what it does and does not affect}
+\label{app:super-d}
+
+The label $d$ appears on $w^{d}_{ji}$, $\bm\Psi^{d}_i$, $\bm B^{d}_i$ and $\bm C^{d}$
+but not on $\bm X_{ji}$, $\bm W_{ji}$ or $\bm M_i$. That asymmetry is the whole content
+of the notation, and it is worth making explicit, because the extension of
+\S\ref{sec:interp} consists of nothing but replacing $d$ by a different label.
+
+\paragraph{Dependency chain.} Reading \eqref{eq:moments} and \eqref{eq:wPsi} from right
+to left,
+\begin{equation}
+\bm C^{d}\ \longmapsto\ \bm\Psi^{d}_i=\bm M_i^{-1}\bm C^{d}
+\ \longmapsto\ w^{d}_{ji}=\bm W_{ji}\cdot\bm\Psi^{d}_i
+\ \longmapsto\ \bm B^{d}_i=\sum_j\bm X_{ji}w^{d}_{ji}\;\bigl(=\bm C^{d}\bigr).
+\label{eq:dchain}
+\end{equation}
+Only $\bm C^{d}$ is supplied; the remaining three are consequences. The superscript is
+therefore \emph{passive}: it enters no formula except as the argument of the solve, and
+it is carried on $\bm\Psi$, $w$ and $\bm B$ only because those objects inherit the
+dependence. In particular $\bm B^{d}_i$ is the vector of moments \emph{achieved}, and
+after the solve it coincides with the vector \emph{prescribed}; \cite{KLN2020} writes
+$\bm B$ in Eq.~(8), before the ansatz, when it is whatever the weights happen to give,
+and replaces it by $\bm C$ in Eq.~(14), when it is demanded.
+
+The passivity is not a redundancy, however: for each $d$ the objects
+$\bm\Psi^{d}_i$ and $w^{d}_{ji}$ are genuinely different arrays of numbers, as the
+example below shows.
+
+\paragraph{A worked example in two dimensions.} Take $m=2$, so that $p=5$ and
+\begin{equation*}
+\bm X_{ji}=\Bigl[x_{ji},\ y_{ji},\ \tfrac{x_{ji}^{2}}{2},\ x_{ji}y_{ji},\
+\tfrac{y_{ji}^{2}}{2}\Bigr]^{\mathsf T},
+\end{equation*}
+and place five neighbours at
+\begin{equation}
+(\pm s,0),\quad (0,\pm s),\quad (s,s),
+\label{eq:2dstencil}
+\end{equation}
+numbered $j_1,\dots,j_5$ in that order, so that $N_i=p$ and, by
+Proposition~\ref{prop:degenerate}, the basis functions cancel and the weights are those
+of the moment conditions alone. Writing out $\bm X^{\mathsf T}\bm w=\bm C$ row by row,
+\begin{align}
+s\,(w_1-w_2)+s\,w_5&=C_1, &
+s\,(w_3-w_4)+s\,w_5&=C_2, &
+\tfrac{s^{2}}{2}(w_1+w_2+w_5)&=C_3,\notag\\
+s^{2}w_5&=C_4, &
+\tfrac{s^{2}}{2}(w_3+w_4+w_5)&=C_5. & &
+\label{eq:2dsys}
+\end{align}
+Solving for the three standard right-hand sides of \cite[Eq.~(5)]{KLN2020}:
+
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+$d$ & $\bm C^{d}$ & $\bm w^{d}=(w_1,\dots,w_5)$ & resulting operator \\
+\midrule
+$x$ & $[1,0,0,0,0]$ & $\bigl[\tfrac{1}{2s},\,-\tfrac{1}{2s},\,0,\,0,\,0\bigr]$
+& $\dfrac{\phi_E-\phi_W}{2s}$ \\[0.5em]
+$y$ & $[0,1,0,0,0]$ & $\bigl[0,\,0,\,\tfrac{1}{2s},\,-\tfrac{1}{2s},\,0\bigr]$
+& $\dfrac{\phi_N-\phi_S}{2s}$ \\[0.5em]
+$L$ & $[0,0,1,0,1]$ & $\bigl[\tfrac{1}{s^{2}},\,\tfrac{1}{s^{2}},\,\tfrac{1}{s^{2}},
+\,\tfrac{1}{s^{2}},\,0\bigr]$
+& $\dfrac{\phi_E+\phi_W+\phi_N+\phi_S-4\phi_i}{s^{2}}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The three classical formulae are recovered, from one and the same $\bm M_i$,
+by changing $\bm C^{d}$ alone. Three features of the table answer the question of what
+the superscript does.
+
+\begin{enumerate}[label=(\roman*)]
+\item \emph{The weights are different arrays, not a relabelling.} $\bm w^{x}$ is
+supported on the two horizontal neighbours, $\bm w^{y}$ on the two vertical ones, and
+$\bm w^{L}$ on all four; the fifth neighbour at $(s,s)$ receives zero weight in all
+three cases, since $C_4=0$ throughout and \eqref{eq:2dsys} gives $w_5=C_4/s^{2}$.
+\item \emph{The superscript carries a dimension.} $w^{x}\sim s^{-1}$ while
+$w^{L}\sim s^{-2}$. This is the scaling requirement of \cite[\S 2]{KLN2020}, that
+$w^{d}$ scale as $h^{-l}$ with $l$ the order of the derivative; for the interpolation
+operator of \S\ref{sec:interp}, $l=0$ and the weights are dimensionless, which is why
+the affine rescaling of \S\ref{sec:affine} requires no inverse transformation.
+\item \emph{The dependence on $\bm C^{d}$ is linear.} Since
+$\bm\Psi^{d}_i=\bm M_i^{-1}\bm C^{d}$ and $w^{d}=\bm W\bm\Psi^{d}$, the map
+$\bm C^{d}\mapsto\bm w^{d}$ is linear. Hence operators superpose: with
+$\bm C^{xx}=[0,0,1,0,0]$ and $\bm C^{yy}=[0,0,0,0,1]$ one has
+$\bm C^{L}=\bm C^{xx}+\bm C^{yy}$ and therefore
+$\bm w^{L}=\bm w^{xx}+\bm w^{yy}$, which the table verifies term by term. The
+hyperviscosity operators of \cite[Eq.~(25)]{KLN2020} are constructed in exactly this
+way, and so is any other linear combination of derivatives one may require.
+\end{enumerate}
+
+\begin{remark}[Why this is the entry point for the present work]
+\label{rem:d-to-q}
+Since $d$ enters only through $\bm C^{d}$, and $\bm M_i$ is indifferent to it, the label
+may be replaced by any index whatever provided a corresponding right-hand side is
+supplied. \S\ref{sec:interp} replaces $d\in\{x,y,L,\dots\}$ by the discrete velocity
+$q\in\{0,\dots,18\}$ and the right-hand side by $\bm X(\bm\delta_q)$. Nothing else in
+the construction changes, which is why one factorisation continues to serve every case
+(Remark~\ref{rem:shared}). The passivity of the superscript is precisely what makes the
+extension available.
+\end{remark}
+
+\subsection{The same computation through the basis functions}
+
+The example above bypassed \eqref{eq:wPsi}. Carrying the parameterisation through
+exhibits its role. Adopt the Hermite construction in the probabilists' normalisation
+of \S\ref{sec:abf}, write $a\equiv s/h_i$ and $\psi_a\equiv\psi(a)$, and use
+$\mathrm{He}_1(z)=z$, $\mathrm{He}_2(z)=z^{2}-1$.
+
+Here $p=2$ and $N_i=2$, so there are four numbers $W^{\alpha}_{ji}$, one for each pair
+of a basis function and a neighbour. It is worth displaying them as an array, since the
+roles of the two indices are the point of the exercise
+(Remark~\ref{rem:indices}): \emph{both} basis functions are evaluated at \emph{both}
+neighbours, and differ between them only through the argument.
+\begin{center}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+& basis $\alpha{=}1$:\ $\mathrm{He}_1(z)=z$
+& basis $\alpha{=}2$:\ $\mathrm{He}_2(z)=z^{2}-1$ \\
+\midrule
+neighbour $j_1$\ \ ($\tilde x=+a$) & $\psi_a\,a$ & $\psi_a\,(a^{2}-1)$ \\
+neighbour $j_2$\ \ ($\tilde x=-a$) & $-\psi_a\,a$ & $\psi_a\,(a^{2}-1)$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\noindent The rows of this array are the vectors of \eqref{eq:wPsi},
+\begin{equation}
+\bm W_{j_1 i}=\psi_a\bigl[a,\ a^{2}-1\bigr]^{\mathsf T},
+\qquad
+\bm W_{j_2 i}=\psi_a\bigl[-a,\ a^{2}-1\bigr]^{\mathsf T},
+\label{eq:exW}
+\end{equation}
+and the array itself is the matrix $\bm W$ of \S\ref{sec:structure}, of shape
+$N_i\times p$. The sign difference between the rows in the first column, and its absence
+in the second, is the parity of $\mathrm{He}_1$ and $\mathrm{He}_2$; it is what produces
+the diagonal structure below.
+
+Assembling $\bm M_i=\sum_j\bm X_{ji}\otimes\bm W_{ji}$ entrywise --- each entry being a
+sum over neighbours, its position fixed by (which monomial, which basis function) ---
+\begin{equation}
+M_{11}=\underbrace{s\cdot\psi_a a}_{\text{from }j_1}
+      +\underbrace{(-s)\cdot(-\psi_a a)}_{\text{from }j_2}=2sa\,\psi_a,
+\qquad
+M_{12}=\underbrace{s\cdot\psi_a(a^{2}{-}1)}_{\text{from }j_1}
+      +\underbrace{(-s)\cdot\psi_a(a^{2}{-}1)}_{\text{from }j_2}=0,
+\label{eq:exMentry}
+\end{equation}
+and likewise $M_{21}=0$ and $M_{22}=s^{2}\psi_a(a^{2}-1)$, so that
+\begin{equation}
+\bm M_i=\bm X^{\mathsf T}\bm W=
+\begin{pmatrix}
+2sa\,\psi_a & 0\\[0.2em]
+0 & s^{2}\psi_a\bigl(a^{2}-1\bigr)
+\end{pmatrix}.
+\label{eq:exM}
+\end{equation}
+The off-diagonal entries vanish identically, in agreement with \eqref{eq:parity}: the
+stencil is symmetric, and an entry pairing a monomial of one parity with a Hermite
+function of the other integrates to zero. Solving \eqref{eq:moments} for
+$\bm C=[1,0]^{\mathsf T}$ gives
+$\bm\Psi=\bigl[(2sa\psi_a)^{-1},\,0\bigr]^{\mathsf T}$ and, through \eqref{eq:wPsi},
+\begin{equation}
+w_{j_1}=\psi_a a\cdot\frac{1}{2sa\psi_a}=\frac{1}{2s},
+\qquad
+w_{j_2}=-\psi_a a\cdot\frac{1}{2sa\psi_a}=-\frac{1}{2s},
+\label{eq:excancel}
+\end{equation}
+identical to \eqref{eq:excd1}; the same cancellation occurs for
+$\bm C=[0,1]^{\mathsf T}$. Neither $\psi$ nor $a$ survives. This is
+Proposition~\ref{prop:degenerate} in the smallest possible instance: with $N_i=p$ the
+parameterisation is a bijection, the selection it performs is vacuous, and the choice
+of basis is immaterial.
+
+\subsection{A degeneracy of the parameterisation that the problem does not possess}
+
+Equation \eqref{eq:exM} is singular when $a=1$, that is when $h_i=s$, since the
+second diagonal entry then vanishes. At that ratio the second-order operator cannot be
+constructed through the ansatz, although the underlying moment conditions
+\eqref{eq:excond} remain uniquely solvable, $\bm X$ being invertible by \eqref{eq:exX}.
+The failure therefore belongs to the parameterisation and not to the problem.
+
+This is the mechanism behind the requirement of \S\ref{sec:sampling} in its simplest
+form. The statement of \cite[\S 3.2]{KLN2020} that the node distribution must
+``adequately sample the ABFs'' is, in this example, the statement that $h_i/s$ must be
+kept away from a value at which the chosen basis becomes blind to a moment it is
+required to control. It is consistent that the operating ratios recommended
+in~\cite[\S 5]{KL2021} for $m=2$ lie above unity; the example does not derive that
+value, but it does show why some such condition is unavoidable, and why the condition
+attaches to the basis rather than to the accuracy requirement.
+
+\subsection{The underdetermined case}
+\label{app:under}
+
+Retain $m=2$ and add a third neighbour at $x=2s$, so that $N_i=3>p=2$. The moment
+conditions for $\bm C=[1,0]^{\mathsf T}$ read
+\begin{equation}
+s\,(w_1-w_2+2w_3)=1,
+\qquad
+\tfrac{s^{2}}{2}\,(w_1+w_2+4w_3)=0,
+\label{eq:exunder}
+\end{equation}
+whose general solution is the one-parameter family
+\begin{equation}
+w_3=t,
+\qquad
+w_1=\frac{1}{2s}-3t,
+\qquad
+w_2=-\frac{1}{2s}-t,
+\qquad t\in\mathbb R .
+\label{eq:exfamily}
+\end{equation}
+Every member reproduces polynomials of degree at most two exactly: on $\phi=x$ the
+operator returns $s(w_1-w_2+2w_3)=1$, and on $\phi=x^{2}$ it returns
+$s^{2}(w_1+w_2+4w_3)=0$, independently of $t$. The choice $t=0$ recovers
+\eqref{eq:excd1}; $t=1/6s$ gives the equally consistent formula
+$\bigl(0,\,-2/3s,\,1/6s\bigr)$.
+
+The members are not, however, indistinguishable. Applying the operator to $\phi=x^{3}$,
+the lowest degree not controlled by the moment conditions, gives
+\begin{equation}
+\mathcal L^{x}_i\bigl(x^{3}\bigr)=s^{3}\bigl(w_1-w_2+8w_3\bigr)=s^{2}+6s^{3}t ,
+\label{eq:exleading}
+\end{equation}
+against an exact value of zero. The error is $O(s^{2})=O(s^{m})$ for every $t$, as the
+order statement requires, but its coefficient depends linearly on $t$: the family shares
+one order of accuracy and not one error constant. The precise
+statement is therefore that the surplus degrees of freedom cannot change the
+\emph{order}, only the coefficient of the leading error term, together with the
+conditioning and stability properties of the resulting operator. It is this coefficient,
+and not the order, that the resolving-power optimisations of~\cite{Broadley2025,%
+Broadley2026} address.
+
+Accuracy of a given order therefore does not distinguish the members of
+\eqref{eq:exfamily}, and some further principle must. In LABFM that principle is the restriction of $\bm w$ to
+$\operatorname{span}(\bm W)$, which selects one value of $t$; in the control formulation
+of \S\ref{sec:mls} it is a weighted least-squares minimisation, which selects another.
+The surplus degree of freedom is spent on conditioning and stability, as recorded in
+Remark~\ref{rem:surplus}, and the requirement $N_i>p$ is not optional: the critical
+neighbour counts of \cite[\S 3.2]{KLN2020} exceed the corresponding polynomial counts
+at every order.
+
+\subsection{The remaining assertions of \texorpdfstring{\cite[\S 3.1]{KLN2020}}{Sec. 3.1}}
+
+Four statements close the section, and each may now be read directly.
+
+\begin{enumerate}[label=(\roman*)]
+\item \emph{Only the first $p$ elements of $\bm X$ and $\bm W$ are retained.} The
+expansion \eqref{eq:momexpand} has infinitely many terms; finitely many can be
+annihilated. The truncation point defines the method's order and fixes the size of
+$\bm M_i$ through \eqref{eq:p}.
+\item \emph{The leading error scales as $h^{\,m+1-l}$.} The first moment \emph{not}
+prescribed is that of total degree $m+1$, and it multiplies a derivative of that order;
+dividing by the $h^{-l}$ scaling of the weights for an $l$-th derivative gives the
+quoted exponent. For $l=0$, the case of interest here, the exponent is $m+1$.
+\item \emph{$\bm M_i$ and $\bm w^{d}$ depend on the anisotropy of the distribution,
+yet the accuracy is maintained.} The diagonal form \eqref{eq:exM} is an artefact of
+symmetry; on a disordered cloud $\bm M_i$ is full, and its off-diagonal entries measure
+the extent to which each basis function contributes to moments other than its own. That
+contamination is inverted by solving \eqref{eq:moments}, which is why the accuracy is
+unaffected while the conditioning is not.
+\item \emph{$\bm M_i$ is the same for every operator.} The matrix is assembled from the
+stencil geometry alone; the operator enters only through the right-hand side. The
+present work rests on this observation, and \S\ref{sec:interp} exploits it by supplying
+a right-hand side that no longer corresponds to a derivative.
+\end{enumerate}
+
+\subsection{Relation to the operator of \texorpdfstring{\S\ref{sec:interp}}{Section 4}}
+
+In the language of Remark~\ref{rem:distribution}, \cite[\S 3.1]{KLN2020} specifies the
+moments of a derivative of a Dirac distribution centred at $\bm r_i$, and the entries of
+$\bm C^{d}$ in \cite[Eq.~(5)]{KLN2020} are exactly those moments. The operator of
+Definition~\ref{def:interp} changes nothing in the construction except the target: the
+moments of a Dirac distribution translated to $\bm r_i+\bm\delta_q$, which are the
+monomials evaluated at the displacement. Where \cite[\S 3.1]{KLN2020} sets almost every
+moment to zero, the present right-hand side prescribes all of them to non-zero values;
+the word ``elimination'' is then no longer descriptive, but the counting argument that
+determines the order --- the first unprescribed moment is the leading error --- is
+unchanged, and is what Theorem~\ref{thm:exact} formalises.
+
+%========================================================================
+\begin{thebibliography}{99}
+
+\bibitem{KLN2020}
+J.~R.~C. King, S.~J. Lind, A. Nasar,
+\emph{High order difference schemes using the local anisotropic basis function method},
+J. Comput. Phys. \textbf{415} (2020) 109549.
+\url{https://doi.org/10.1016/j.jcp.2020.109549}.
+\newline\emph{Cited throughout from the published version; local copy at}
+\texttt{docs/literature/1.\,High order difference schemes using the local anisotropic
+basis function method.pdf}\emph{. Section and equation numbers follow that version.}
+
+\bibitem{KL2021}
+J.~R.~C. King, S.~J. Lind,
+\emph{High-order simulations of isothermal flows using the local anisotropic basis
+function method (LABFM)},
+J. Comput. Phys. \textbf{449} (2022) 110760.
+\url{https://doi.org/10.1016/j.jcp.2021.110760}.
+\newline\emph{Cited throughout from the published version; local copy at}
+\texttt{docs/literature/2.\,High-order simulations of isothermal flows using the local
+anisotropic basis function method (LABFM) pdf.pdf}\emph{. Section and equation numbers
+follow that version.}
+
+\bibitem{Broadley2025}
+H. Broadley, S.~J. Lind, J.~R.~C. King,
+\emph{Improving the accuracy of meshless methods via resolving power optimisation using
+multiple kernels}, arXiv:2510.20365 (2025).
+\url{https://arxiv.org/abs/2510.20365}.
+
+\bibitem{Broadley2026}
+H.~M. Broadley, J.~R.~C. King, S.~J. Lind,
+\emph{Compact LABFM: a framework for meshless methods with spectral-like resolving
+power}, arXiv:2603.11668 (2026).
+\url{https://arxiv.org/abs/2603.11668}.
+
+\bibitem{Feng2025}
+R. Feng, J.~R.~C. King, S.~J. Lind,
+\emph{A p-adaptive high-order mesh-free framework for fluid simulations in complex
+geometries}, arXiv:2511.21224 (2025).
+\url{https://arxiv.org/abs/2511.21224}.
+
+\bibitem{Lancaster1981}
+P. Lancaster, K. Salkauskas,
+\emph{Surfaces generated by moving least squares methods},
+Math. Comp. \textbf{37} (1981) 141--158.
+\url{https://doi.org/10.1090/S0025-5718-1981-0616367-1}.
+
+\bibitem{Mirzaei2012}
+D. Mirzaei, R. Schaback, M. Dehghan,
+\emph{On generalized moving least squares and diffuse derivatives},
+IMA J. Numer. Anal. \textbf{32} (2012) 983--1000.
+\url{https://doi.org/10.1093/imanum/drr030}.
+
+\bibitem{Trask2016}
+N. Trask, M. Maxey, X. Hu,
+\emph{Compact moving least squares: an optimization framework for generating
+high-order compact meshless discretizations},
+J. Comput. Phys. \textbf{326} (2016) 596--611.
+\url{https://doi.org/10.1016/j.jcp.2016.08.045}.
+
+\bibitem{FornbergFlyer2015}
+B. Fornberg, N. Flyer,
+\emph{Fast generation of 2D node distributions for mesh-free PDE discretizations},
+Comput. Math. Appl. \textbf{69} (2015) 531--544.
+
+\bibitem{Musavi2015}
+S.~H. Musavi, M. Ashrafizaadeh,
+\emph{Meshless lattice Boltzmann method for the simulation of fluid flows},
+Phys. Rev. E \textbf{91} (2015) 023310.
+\url{https://doi.org/10.1103/PhysRevE.91.023310}.
+
+\bibitem{LinWuZhang2019}
+X. Lin, J. Wu, T. Zhang,
+\emph{A mesh-free radial basis function-based semi-Lagrangian lattice Boltzmann method
+for incompressible flows},
+Int. J. Numer. Methods Fluids (2019).
+\url{https://doi.org/10.1002/fld.4749}.
+
+\bibitem{Strzelczyk2023}
+D. Strzelczyk, M. Matyka,
+\emph{Study of the convergence of the meshless lattice Boltzmann method in
+Taylor--Green and annular channel flows}, arXiv:2306.01525 (2023).
+\url{https://arxiv.org/abs/2306.01525}.
+
+\bibitem{Strzelczyk2024}
+D. Strzelczyk, M. Matyka,
+\emph{Modeling inertial flows with meshless lattice Boltzmann method},
+arXiv:2312.14789 (2024).
+\url{https://arxiv.org/abs/2312.14789}.
+
+\bibitem{WangYang2025}
+X. Wang, S. Yang,
+\emph{A semi-Lagrangian meshfree lattice Boltzmann method for incompressible two-phase
+flows}, J. Comput. Phys. (2025).
+\url{https://doi.org/10.1016/j.jcp.2025.113727}.
+
+\bibitem{Maidenberg2026}
+A. Maidenberg, Y. Chen,
+\emph{A meshless discrete Boltzmann solver with the radial basis function finite
+difference scheme for fluid flows with Dirichlet boundary conditions},
+J. Fluids Eng. \textbf{148} (2026) 021501.
+\url{https://doi.org/10.1115/1.4069638}.
+
+\bibitem{Kramer2017}
+A. Kr\"amer, K. K\"ullmer, D. Reith, W. Joppich, H. Foysi,
+\emph{Semi-Lagrangian off-lattice Boltzmann method for weakly compressible flows},
+Phys. Rev. E \textbf{95} (2017) 023305.
+\url{https://doi.org/10.1103/PhysRevE.95.023305}.
+
+\bibitem{Wilde2020}
+D. Wilde, A. Kr\"amer, D. Reith, H. Foysi,
+\emph{Semi-Lagrangian lattice Boltzmann method for compressible flows},
+Phys. Rev. E \textbf{101} (2020) 053306.
+\url{https://doi.org/10.1103/PhysRevE.101.053306}.
+
+\bibitem{Wilde2021}
+D. Wilde, A. Kr\"amer, D. Reith, H. Foysi,
+\emph{High-order semi-Lagrangian kinetic scheme for compressible turbulence},
+Phys. Rev. E \textbf{104} (2021) 025301.
+\url{https://doi.org/10.1103/PhysRevE.104.025301};
+preprint \url{https://arxiv.org/abs/2012.05537}.
+
+\bibitem{Spelten2024}
+P. Spelten, D. Wilde, M.~C. Bedrunka, D. Reith, H. Foysi,
+\emph{Supersonic shear and wall-bounded flows with body-fitted meshes using the
+semi-Lagrangian lattice Boltzmann method: boundary schemes and applications},
+arXiv:2412.09051 (2024).
+\url{https://arxiv.org/abs/2412.09051}.
+
+\bibitem{Jin2025}
+B.-X. Jin, S.-W. Feng, Y.-H. Chiu, C.-A. Lin,
+\emph{Direct numerical simulations of turbulent channel and duct flows using
+interpolation-based lattice Boltzmann method},
+Flow Turbul. Combust. (2025).
+\url{https://doi.org/10.1007/s10494-025-00689-w}.
+
+\bibitem{Breuer2009}
+M. Breuer, N. Peller, C. Rapp, M. Manhart,
+\emph{Flow over periodic hills --- numerical and experimental study in a wide range of
+Reynolds numbers}, Comput. Fluids \textbf{38} (2009) 433--457.
+
+\end{thebibliography}
+
+\end{document}
