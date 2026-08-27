@@ -1,0 +1,754 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=25mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,mathtools,bm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\numberwithin{equation}{section}
+\DeclareMathOperator{\Arg}{Arg}
+\newcommand{\ii}{\mathrm{i}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\pospart}[1]{\left[#1\right]_{+}}
+
+\title{Fourier Gain and Phase-Error Characterization\\
+of a Local LABFM Interpolation Operator}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A single Fourier mode is used to characterize the local amplitude and phase distortions introduced by a LABFM interpolation operator. Three mathematically equivalent representations are developed. First, the complex amplification function is derived entirely in dimensional coordinates and dimensional wavenumbers. Second, the spatial coordinates and wavenumbers are nondimensionalized consistently, with an additional Nyquist-normalized wavenumber introduced for spectral plotting. Third, only the spatial coordinates are scaled while the physical wavenumber components are retained. Throughout the primary analysis, the departure displacement and Fourier-wave orientation are prescribed, and the full-field extrema are taken only over the stencil centers in the computational domain. The stencil label $\ell$ uniquely identifies a local stencil model and is not required to equal its cardinality.
+\end{abstract}
+
+\section{Dimensional Fourier formulation}
+\label{sec:dimensional}
+
+\subsection{Geometric and stencil notation}
+
+Let $\Omega\subset\R^2$ be the computational domain and let
+\begin{equation}
+    \mathcal I_{\Omega}
+    =
+    \left\{i:\bm{x}_i\in\Omega\right\}
+    \label{eq:center-index-set}
+\end{equation}
+be the set of admissible stencil-center indices. The index $i$ denotes a stencil center and $j$ denotes a node belonging to the corresponding local stencil. Their positions are
+\begin{equation}
+    \bm{x}_i=(x_i,y_i)^{\mathsf T},
+    \qquad
+    \bm{x}_j=(x_j,y_j)^{\mathsf T}.
+    \label{eq:center-node-coordinates}
+\end{equation}
+The relative coordinates of node $j$ with respect to center $i$ are
+\begin{equation}
+    x_{ji}=x_j-x_i,
+    \qquad
+    y_{ji}=y_j-y_i.
+    \label{eq:relative-node-coordinates}
+\end{equation}
+
+The departure point used in the primary analysis is prescribed rather than scanned. Its position relative to center $i$ is
+\begin{equation}
+    \bm{\delta}_d
+    =
+    \bm{x}_d-\bm{x}_i
+    =
+    \begin{bmatrix}
+        x_{di}\\[1mm]
+        y_{di}
+    \end{bmatrix},
+    \qquad
+    x_{di}=x_d-x_i,
+    \qquad
+    y_{di}=y_d-y_i.
+    \label{eq:departure-displacement}
+\end{equation}
+The symbol $d$ therefore identifies the fixed departure point used in the analysis; it is not an index over which a full-field extremum is taken.
+
+For each center $i$, the set $\mathcal S_{i\ell}$ denotes one complete local stencil and contains the center itself,
+\begin{equation}
+    i\in\mathcal S_{i\ell}.
+    \label{eq:center-in-stencil}
+\end{equation}
+The symbol $\ell$ is a unique stencil-model label. It may be numerical, for example
+\begin{equation}
+    \ell\in\{10,15,17,31,\ldots\},
+    \label{eq:numerical-stencil-labels}
+\end{equation}
+or symbolic, for example $\ell\in\{a,b,c,d,\ldots\}$. When a numerical label is used, it commonly coincides with the total number of stencil nodes, including the center, but no algebraic step below requires the identity $|\mathcal S_{i\ell}|=\ell$. The only required property is that the pair $(i,\ell)$ uniquely identifies one local interpolation model.
+
+The local interpolation of a scalar field $f$ at the prescribed departure displacement is written in difference form as
+\begin{equation}
+    \widetilde f_{i\ell}\!\left(\bm{\delta}_d\right)
+    =
+    f\!\left(\bm{x}_i\right)
+    +
+    \sum_{j\in\mathcal S_{i\ell}}
+    w_{ji,d}^{(\ell)}
+    \left[
+        f\!\left(\bm{x}_j\right)
+        -
+        f\!\left(\bm{x}_i\right)
+    \right].
+    \label{eq:interpolation-operator}
+\end{equation}
+Because $i\in\mathcal S_{i\ell}$, the summand corresponding to $j=i$ vanishes identically. The center weight may therefore be set to $w_{ii,d}^{(\ell)}=0$ without loss of generality, and a separate stencil set excluding the center is unnecessary.
+
+\subsection{Single Fourier mode and discrete response}
+
+Let $k_n$ and $k_m$ be the dimensional wavenumber components in the $x$- and $y$-directions, respectively. The continuous Fourier probing function is
+\begin{equation}
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}\right)
+    =
+    \exp\!\left[\ii\left(k_nx+k_my\right)\right],
+    \qquad
+    \bm{x}=(x,y)^{\mathsf T},
+    \qquad
+    \ii^2=-1.
+    \label{eq:fourier-mode}
+\end{equation}
+The superscript ${\mathrm F}$ identifies the Fourier mode. Since $f^{\mathrm F}$ is a continuous function, a spatial location is supplied as a function argument rather than as a discrete subscript.
+
+At node $j$ and at the departure point,
+\begin{subequations}
+\label{eq:fourier-relative-values}
+\begin{align}
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_j\right)
+    &=
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    \exp\!\left[\ii\left(k_nx_{ji}+k_my_{ji}\right)\right],
+    \label{eq:fourier-at-node}\\
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i+\bm{\delta}_d\right)
+    &=
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    \exp\!\left[\ii\left(k_nx_{di}+k_my_{di}\right)\right].
+    \label{eq:fourier-at-departure}
+\end{align}
+\end{subequations}
+
+Substitution of \cref{eq:fourier-mode} into \cref{eq:interpolation-operator} gives the discrete Fourier response of the local model $(i,\ell)$:
+\begin{align}
+    \widetilde f^{\mathrm F}_{i\ell}
+    \!\left(k_n,k_m;\bm{\delta}_d\right)
+    &=
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    +
+    \sum_{j\in\mathcal S_{i\ell}}
+    w_{ji,d}^{(\ell)}
+    \left[
+        f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_j\right)
+        -
+        f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    \right]
+    \nonumber\\
+    &=
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    \left[
+        1+
+        \sum_{j\in\mathcal S_{i\ell}}
+        w_{ji,d}^{(\ell)}
+        \left\{
+            \exp\!\left[\ii\left(k_nx_{ji}+k_my_{ji}\right)\right]-1
+        \right\}
+    \right].
+    \label{eq:discrete-fourier-response}
+\end{align}
+Only the discrete approximation carries the subscript pair $(i,\ell)$. The wavenumber components and the departure displacement remain function arguments.
+
+\subsection{Complex amplification function, gain factor, and phase error}
+
+The local complex amplification function is defined as the ratio between the discrete Fourier response and the exact continuous Fourier value at the same departure point:
+\begin{equation}
+    \boxed{
+    G_{i\ell}\!\left(k_n,k_m;\bm{\delta}_d\right)
+    =
+    \frac{
+        \widetilde f^{\mathrm F}_{i\ell}
+        \!\left(k_n,k_m;\bm{\delta}_d\right)
+    }{
+        f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i+\bm{\delta}_d\right)
+    }.
+    }
+    \label{eq:G-definition}
+\end{equation}
+Using \cref{eq:fourier-at-departure,eq:discrete-fourier-response},
+\begin{equation}
+\boxed{
+\begin{aligned}
+    G_{i\ell}\!\left(k_n,k_m;\bm{\delta}_d\right)
+    &=
+    \exp\!\left[-\ii\left(k_nx_{di}+k_my_{di}\right)\right]
+    \\
+    &\quad\times
+    \left[
+        1+
+        \sum_{j\in\mathcal S_{i\ell}}
+        w_{ji,d}^{(\ell)}
+        \left\{
+            \exp\!\left[\ii\left(k_nx_{ji}+k_my_{ji}\right)\right]-1
+        \right\}
+    \right].
+\end{aligned}
+}
+\label{eq:G-dimensional}
+\end{equation}
+No normalization has been introduced in \cref{eq:G-dimensional}. Every exponential argument is dimensionless because $[k_n]=[k_m]=L^{-1}$ and all coordinate differences have units of length. The arbitrary absolute phase at $\bm{x}_i$ has cancelled exactly. An exact interpolation gives
+\begin{equation}
+    G_{i\ell}=1.
+    \label{eq:exact-G}
+\end{equation}
+
+The local gain factor is the modulus of the complex amplification function:
+\begin{equation}
+    \boxed{
+    \alpha_{i\ell}^{\mathrm{loc}}
+    \!\left(k_n,k_m;\bm{\delta}_d\right)
+    =
+    \left|
+        G_{i\ell}\!\left(k_n,k_m;\bm{\delta}_d\right)
+    \right|.
+    }
+    \label{eq:local-gain}
+\end{equation}
+Thus, $\alpha_{i\ell}^{\mathrm{loc}}<1$ represents amplitude attenuation, $\alpha_{i\ell}^{\mathrm{loc}}=1$ represents exact amplitude preservation, and $\alpha_{i\ell}^{\mathrm{loc}}>1$ represents amplitude amplification. The signed gain error is
+\begin{equation}
+    \varepsilon_{\alpha,i\ell}^{\mathrm{loc}}
+    =
+    \alpha_{i\ell}^{\mathrm{loc}}-1.
+    \label{eq:signed-gain-error}
+\end{equation}
+
+Because the exact departure-point phase has already been divided out in \cref{eq:G-definition}, the local phase error is directly
+\begin{equation}
+    \boxed{
+    \phi_{i\ell}^{\mathrm{loc}}
+    \!\left(k_n,k_m;\bm{\delta}_d\right)
+    =
+    \Arg\!\left[
+        G_{i\ell}\!\left(k_n,k_m;\bm{\delta}_d\right)
+    \right].
+    }
+    \label{eq:local-phase}
+\end{equation}
+The exact phase error is zero. A nonzero value of \cref{eq:local-phase} represents interpolation-induced numerical dispersion. The phase is undefined when $G_{i\ell}=0$. Continuous signed phase curves should be unwrapped in wavenumber, whereas a worst-case absolute phase metric may use the principal argument in $(-\pi,\pi]$ \cite{Desvigne2010}.
+
+For completeness, the normalized complex interpolation error is
+\begin{equation}
+    \varepsilon_{i\ell}^{\mathrm{loc}}
+    =
+    \left|1-G_{i\ell}\right|,
+    \label{eq:total-complex-error}
+\end{equation}
+and, with $G_{i\ell}=\alpha_{i\ell}^{\mathrm{loc}}\exp(\ii\phi_{i\ell}^{\mathrm{loc}})$,
+\begin{equation}
+    \left|1-G_{i\ell}\right|^2
+    =
+    \left(1-\alpha_{i\ell}^{\mathrm{loc}}\right)^2
+    +
+    2\alpha_{i\ell}^{\mathrm{loc}}
+    \left(1-\cos\phi_{i\ell}^{\mathrm{loc}}\right).
+    \label{eq:complex-error-decomposition}
+\end{equation}
+Hence, the total error combines gain and phase distortions and does not replace their separate examination.
+
+\subsection{Fixed wave direction and full-field extrema}
+
+Let
+\begin{equation}
+    k=\sqrt{k_n^2+k_m^2},
+    \qquad
+    k_n=k\cos\theta_k,
+    \qquad
+    k_m=k\sin\theta_k.
+    \label{eq:directional-wavenumber}
+\end{equation}
+The wave orientation $\theta_k$ is a curve parameter and is never included in the spatial extremization. Likewise, the departure displacement $\bm{\delta}_d$ is prescribed and is not scanned. For a fixed pair $(\theta_k,\bm{\delta}_d)$, the full-field maximum gain is defined only over the stencil centers:
+\begin{equation}
+    \boxed{
+    \alpha_{\ell}^{\max}
+    \!\left(k;\theta_k,\bm{\delta}_d\right)
+    =
+    \max_{i\in\mathcal I_{\Omega}}
+    \left|
+        G_{i\ell}\!\left(
+            k\cos\theta_k,
+            k\sin\theta_k;
+            \bm{\delta}_d
+        \right)
+    \right|.
+    }
+    \label{eq:full-field-max-gain}
+\end{equation}
+The corresponding maximum absolute phase error is
+\begin{equation}
+    \boxed{
+    \Phi_{\ell}^{\max}
+    \!\left(k;\theta_k,\bm{\delta}_d\right)
+    =
+    \max_{i\in\mathcal I_{\Omega}}
+    \left|
+        \Arg\!\left[
+            G_{i\ell}\!\left(
+                k\cos\theta_k,
+                k\sin\theta_k;
+                \bm{\delta}_d
+            \right)
+        \right]
+    \right|.
+    }
+    \label{eq:full-field-max-phase}
+\end{equation}
+The strongest amplitude attenuation is characterized by
+\begin{equation}
+    \boxed{
+    \alpha_{\ell}^{\min}
+    \!\left(k;\theta_k,\bm{\delta}_d\right)
+    =
+    \min_{i\in\mathcal I_{\Omega}}
+    \left|
+        G_{i\ell}\!\left(
+            k\cos\theta_k,
+            k\sin\theta_k;
+            \bm{\delta}_d
+        \right)
+    \right|.
+    }
+    \label{eq:full-field-min-gain}
+\end{equation}
+Thus, $\alpha_{\ell}^{\max}$ detects the largest local amplification, while $\alpha_{\ell}^{\min}$ detects the strongest local damping. These quantities are worst-case envelopes of local transfer functions. Because a spatially varying LABFM operator is not generally translation invariant, they should not be interpreted as eigenvalues or as the spectral radius of the assembled global interpolation matrix.
+
+The primary curves considered here use the fixed wave orientation
+\begin{equation}
+    \boxed{
+    \theta_k=\frac{\pi}{4},
+    \qquad
+    k_n=k_m=\frac{k}{\sqrt{2}}.
+    }
+    \label{eq:primary-angle}
+\end{equation}
+Accordingly,
+\begin{equation}
+    \alpha_{\ell}^{\max}
+    \!\left(k;\frac{\pi}{4},\bm{\delta}_d\right)
+    =
+    \max_{i\in\mathcal I_{\Omega}}
+    \left|
+        G_{i\ell}\!\left(
+            \frac{k}{\sqrt{2}},
+            \frac{k}{\sqrt{2}};
+            \bm{\delta}_d
+        \right)
+    \right|,
+    \label{eq:primary-max-gain}
+\end{equation}
+with analogous specializations for \cref{eq:full-field-max-phase,eq:full-field-min-gain}. Other values of $\theta_k$ may be examined subsequently as separate directional studies.
+
+\section{Paired nondimensionalization and Nyquist normalization}
+\label{sec:paired-nondimensionalization}
+
+\subsection{Scaled coordinates and phase-scaled wavenumbers}
+
+Let $A_i$ be the area associated with center $i$, and define the local characteristic length
+\begin{equation}
+    s_i=\sqrt{A_i}.
+    \label{eq:local-length-scale}
+\end{equation}
+The dimensionless relative coordinates are
+\begin{subequations}
+\label{eq:dimensionless-coordinates}
+\begin{align}
+    \xi_{ji}&=\frac{x_{ji}}{s_i},
+    &
+    \eta_{ji}&=\frac{y_{ji}}{s_i},
+    \label{eq:dimensionless-node-coordinates}\\
+    \xi_{di}&=\frac{x_{di}}{s_i},
+    &
+    \eta_{di}&=\frac{y_{di}}{s_i}.
+    \label{eq:dimensionless-departure-coordinates}
+\end{align}
+\end{subequations}
+The scaled departure vector is
+\begin{equation}
+    \widehat{\bm{\delta}}_{d,i}
+    =
+    \frac{\bm{\delta}_d}{s_i}
+    =
+    \begin{bmatrix}
+        \xi_{di}\\[1mm]
+        \eta_{di}
+    \end{bmatrix}.
+    \label{eq:scaled-departure-vector}
+\end{equation}
+
+The dimensionless variables that arise directly in the Fourier phase are
+\begin{equation}
+    \mu_{n,i}=k_ns_i,
+    \qquad
+    \mu_{m,i}=k_ms_i.
+    \label{eq:phase-scaled-wavenumbers}
+\end{equation}
+They preserve the phase exactly:
+\begin{align}
+    k_nx_{ji}+k_my_{ji}
+    &=
+    \mu_{n,i}\xi_{ji}+\mu_{m,i}\eta_{ji},
+    \label{eq:node-phase-preservation}\\
+    k_nx_{di}+k_my_{di}
+    &=
+    \mu_{n,i}\xi_{di}+\mu_{m,i}\eta_{di}.
+    \label{eq:departure-phase-preservation}
+\end{align}
+The variables $\mu_{n,i}$ and $\mu_{m,i}$ are dimensionless phase-scaled wavenumbers. They are not yet normalized so that unity represents a Nyquist limit.
+
+\subsection{Nominal Nyquist-normalized wavenumbers}
+
+For spectral plotting, introduce the nominal local Nyquist reference
+\begin{equation}
+    k_{\mathrm{Ny},i}^{\mathrm{nom}}
+    =
+    \frac{\pi}{s_i}.
+    \label{eq:nominal-nyquist}
+\end{equation}
+The Nyquist-normalized wavenumber components are then
+\begin{equation}
+    \boxed{
+    \kappa_{n,i}
+    =
+    \frac{k_n}{k_{\mathrm{Ny},i}^{\mathrm{nom}}}
+    =
+    \frac{k_ns_i}{\pi},
+    \qquad
+    \kappa_{m,i}
+    =
+    \frac{k_m}{k_{\mathrm{Ny},i}^{\mathrm{nom}}}
+    =
+    \frac{k_ms_i}{\pi}.
+    }
+    \label{eq:nyquist-normalized-components}
+\end{equation}
+Thus,
+\begin{equation}
+    \mu_{n,i}=\pi\kappa_{n,i},
+    \qquad
+    \mu_{m,i}=\pi\kappa_{m,i}.
+    \label{eq:mu-kappa-relation}
+\end{equation}
+The radial Nyquist-normalized wavenumber is
+\begin{equation}
+    \kappa_i
+    =
+    \sqrt{\kappa_{n,i}^2+\kappa_{m,i}^2}
+    =
+    \frac{k}{k_{\mathrm{Ny},i}^{\mathrm{nom}}}
+    =
+    \frac{ks_i}{\pi}.
+    \label{eq:radial-nyquist-normalization}
+\end{equation}
+For a fixed orientation,
+\begin{equation}
+    \kappa_{n,i}=\kappa_i\cos\theta_k,
+    \qquad
+    \kappa_{m,i}=\kappa_i\sin\theta_k.
+    \label{eq:normalized-direction}
+\end{equation}
+
+The definition in \cref{eq:nyquist-normalized-components} is the appropriate normalization when the horizontal axis is intended to represent a fraction of the local Nyquist scale. By contrast, $k_ns_i$ and $k_ms_i$ are the natural phase variables. Both conventions are correct, and they differ only by the factor $\pi$. On an irregular point cloud, $k_{\mathrm{Ny},i}^{\mathrm{nom}}=\pi/s_i$ is a nominal local reference rather than a rigorous direction-independent aliasing boundary.
+
+\subsection{Amplification function in Nyquist-normalized form}
+
+Using \cref{eq:dimensionless-coordinates,eq:nyquist-normalized-components}, the same amplification function is written as
+\begin{equation}
+\boxed{
+\begin{aligned}
+    G_{i\ell}^{\mathrm{Ny}}
+    \!\left(
+        \kappa_{n,i},\kappa_{m,i};
+        \widehat{\bm{\delta}}_{d,i}
+    \right)
+    &=
+    \exp\!\left[-\ii\pi\left(
+        \kappa_{n,i}\xi_{di}
+        +
+        \kappa_{m,i}\eta_{di}
+    \right)\right]
+    \\
+    &\quad\times
+    \left[
+        1+
+        \sum_{j\in\mathcal S_{i\ell}}
+        w_{ji,d}^{(\ell)}
+        \left\{
+            \exp\!\left[\ii\pi\left(
+                \kappa_{n,i}\xi_{ji}
+                +
+                \kappa_{m,i}\eta_{ji}
+            \right)\right]-1
+        \right\}
+    \right].
+\end{aligned}
+}
+\label{eq:G-nyquist-normalized}
+\end{equation}
+The factor $\pi$ is essential. It follows directly from the definition $k_{\mathrm{Ny},i}^{\mathrm{nom}}=\pi/s_i$ and preserves the original dimensional Fourier phase. For corresponding dimensional and normalized variables,
+\begin{equation}
+    \boxed{
+    G_{i\ell}^{\mathrm{Ny}}
+    \!\left(
+        \frac{k_ns_i}{\pi},
+        \frac{k_ms_i}{\pi};
+        \frac{\bm{\delta}_d}{s_i}
+    \right)
+    =
+    G_{i\ell}\!\left(k_n,k_m;\bm{\delta}_d\right).
+    }
+    \label{eq:nyquist-G-equivalence}
+\end{equation}
+Consequently, the gain factor and phase error are unchanged by this reparameterization.
+
+For full-field resolving-power curves, a common normalized radial parameter $\kappa$ may be prescribed at every center. In that case, the physical wavenumber used at center $i$ is
+\begin{equation}
+    k^{(i)}=\kappa k_{\mathrm{Ny},i}^{\mathrm{nom}}=\frac{\pi\kappa}{s_i}.
+    \label{eq:local-physical-k-from-normalized}
+\end{equation}
+At the primary angle $\theta_k=\pi/4$,
+\begin{equation}
+    \kappa_n=\kappa_m=\frac{\kappa}{\sqrt{2}}.
+    \label{eq:normalized-primary-angle}
+\end{equation}
+The corresponding full-field maximum gain is
+\begin{equation}
+    \boxed{
+    \alpha_{\ell,\mathrm{Ny}}^{\max}
+    \!\left(\kappa;\frac{\pi}{4},\bm{\delta}_d\right)
+    =
+    \max_{i\in\mathcal I_{\Omega}}
+    \left|
+        G_{i\ell}^{\mathrm{Ny}}
+        \!\left(
+            \frac{\kappa}{\sqrt{2}},
+            \frac{\kappa}{\sqrt{2}};
+            \widehat{\bm{\delta}}_{d,i}
+        \right)
+    \right|.
+    }
+    \label{eq:normalized-full-field-max-gain}
+\end{equation}
+The maximum phase error and minimum gain are defined analogously by replacing the modulus in \cref{eq:normalized-full-field-max-gain} with the corresponding operations. A common $\kappa$ compares all centers at the same wavelength relative to their own local spacing; it does not impose one common physical wavenumber when $s_i$ varies spatially.
+
+\section{Coordinate-only scaling with physical wavenumbers}
+\label{sec:coordinate-only-scaling}
+
+The preceding section scaled both the coordinates and the wavenumbers. An alternative representation scales only the spatial coordinates while retaining the dimensional physical wavenumber components $k_n$ and $k_m$.
+
+Using
+\begin{equation}
+    x_{ji}=s_i\xi_{ji},
+    \qquad
+    y_{ji}=s_i\eta_{ji},
+    \qquad
+    x_{di}=s_i\xi_{di},
+    \qquad
+    y_{di}=s_i\eta_{di},
+    \label{eq:inverse-coordinate-scaling}
+\end{equation}
+the Fourier phases become
+\begin{align}
+    k_nx_{ji}+k_my_{ji}
+    &=
+    s_i\left(k_n\xi_{ji}+k_m\eta_{ji}\right),
+    \label{eq:coordinate-only-node-phase}\\
+    k_nx_{di}+k_my_{di}
+    &=
+    s_i\left(k_n\xi_{di}+k_m\eta_{di}\right).
+    \label{eq:coordinate-only-departure-phase}
+\end{align}
+The factor $s_i$ must remain explicitly in the phase because the coordinates $\xi$ and $\eta$ are dimensionless whereas $k_n$ and $k_m$ retain units of inverse length.
+
+The complex amplification function can therefore be written as
+\begin{equation}
+\boxed{
+\begin{aligned}
+    G_{i\ell}^{\mathrm{coord}}
+    \!\left(
+        k_n,k_m;
+        \widehat{\bm{\delta}}_{d,i},s_i
+    \right)
+    &=
+    \exp\!\left[-\ii s_i\left(
+        k_n\xi_{di}+k_m\eta_{di}
+    \right)\right]
+    \\
+    &\quad\times
+    \left[
+        1+
+        \sum_{j\in\mathcal S_{i\ell}}
+        w_{ji,d}^{(\ell)}
+        \left\{
+            \exp\!\left[\ii s_i\left(
+                k_n\xi_{ji}+k_m\eta_{ji}
+            \right)\right]-1
+        \right\}
+    \right].
+\end{aligned}
+}
+\label{eq:G-coordinate-only}
+\end{equation}
+Equation~\eqref{eq:G-coordinate-only} is not a new spectral model. It is an exact coordinate transformation of \cref{eq:G-dimensional}:
+\begin{equation}
+    \boxed{
+    G_{i\ell}^{\mathrm{coord}}
+    \!\left(
+        k_n,k_m;
+        \bm{\delta}_d/s_i,s_i
+    \right)
+    =
+    G_{i\ell}\!\left(k_n,k_m;\bm{\delta}_d\right).
+    }
+    \label{eq:coordinate-only-equivalence}
+\end{equation}
+Therefore,
+\begin{equation}
+    \left|G_{i\ell}^{\mathrm{coord}}\right|
+    =
+    \left|G_{i\ell}\right|,
+    \qquad
+    \Arg\!\left(G_{i\ell}^{\mathrm{coord}}\right)
+    =
+    \Arg\!\left(G_{i\ell}\right)
+    \quad (\mathrm{mod}\ 2\pi).
+    \label{eq:coordinate-only-gain-phase-equivalence}
+\end{equation}
+No additional normalization of the gain factor or phase error is required.
+
+At a fixed wave orientation,
+\begin{equation}
+\begin{aligned}
+    G_{i\ell}^{\mathrm{coord}}
+    \!\left(k;\theta_k,\widehat{\bm{\delta}}_{d,i},s_i\right)
+    &=
+    \exp\!\left[-\ii ks_i\left(
+        \xi_{di}\cos\theta_k
+        +
+        \eta_{di}\sin\theta_k
+    \right)\right]
+    \\
+    &\quad\times
+    \left[
+        1+
+        \sum_{j\in\mathcal S_{i\ell}}
+        w_{ji,d}^{(\ell)}
+        \left\{
+            \exp\!\left[\ii ks_i\left(
+                \xi_{ji}\cos\theta_k
+                +
+                \eta_{ji}\sin\theta_k
+            \right)\right]-1
+        \right\}
+    \right].
+    \label{eq:G-coordinate-directional}
+\end{aligned}
+\end{equation}
+For the primary angle $\theta_k=\pi/4$,
+\begin{equation}
+\boxed{
+\begin{aligned}
+    G_{i\ell}^{\mathrm{coord}}
+    \!\left(k;\frac{\pi}{4},\widehat{\bm{\delta}}_{d,i},s_i\right)
+    &=
+    \exp\!\left[-\ii\frac{ks_i}{\sqrt{2}}
+        \left(\xi_{di}+\eta_{di}\right)\right]
+    \\
+    &\quad\times
+    \left[
+        1+
+        \sum_{j\in\mathcal S_{i\ell}}
+        w_{ji,d}^{(\ell)}
+        \left\{
+            \exp\!\left[\ii\frac{ks_i}{\sqrt{2}}
+                \left(\xi_{ji}+\eta_{ji}\right)\right]-1
+        \right\}
+    \right].
+\end{aligned}
+}
+\label{eq:G-coordinate-primary-angle}
+\end{equation}
+The full-field maximum gain at a common physical wavenumber $k$ remains a maximum over $i$ only:
+\begin{equation}
+    \boxed{
+    \alpha_{\ell,\mathrm{coord}}^{\max}
+    \!\left(k;\frac{\pi}{4},\bm{\delta}_d\right)
+    =
+    \max_{i\in\mathcal I_{\Omega}}
+    \left|
+        G_{i\ell}^{\mathrm{coord}}
+        \!\left(k;\frac{\pi}{4},\widehat{\bm{\delta}}_{d,i},s_i\right)
+    \right|.
+    }
+    \label{eq:coordinate-only-full-field-max}
+\end{equation}
+Unlike \cref{eq:normalized-full-field-max-gain}, \cref{eq:coordinate-only-full-field-max} imposes the same physical Fourier mode at every center. When $s_i$ varies, the local Nyquist ratio $ks_i/\pi$ consequently varies across the domain.
+
+The coordinate-only form should be interpreted as a rewriting of an already constructed interpolation operator. If the interpolation weights are recomputed after coordinate scaling, the weight-construction procedure must itself be scale consistent for \cref{eq:coordinate-only-equivalence} to remain valid.
+
+\section{Recommended interpretation and plotting variables}
+\label{sec:recommendations}
+
+The three representations answer different practical needs but describe the same local interpolation response:
+\begin{enumerate}[label=(\roman*),leftmargin=2.2em]
+    \item The dimensional form, \cref{eq:G-dimensional}, is the primary mathematical definition and contains no arbitrary normalization.
+    \item The paired nondimensional form, \cref{eq:G-nyquist-normalized}, is most convenient for comparing resolving power. The horizontal variable $\kappa=k/k_{\mathrm{Ny},i}^{\mathrm{nom}}$ directly indicates the fraction of the nominal local Nyquist scale, and the Fourier exponent contains the required factor $\pi$.
+    \item The coordinate-only form, \cref{eq:G-coordinate-only}, retains the physical wavenumbers and merely rewrites the local geometry in units of $s_i$. It is the appropriate representation when one common physical Fourier mode is imposed throughout a nonuniform domain.
+\end{enumerate}
+
+For the present primary analysis, the departure displacement $\bm{\delta}_d$ and the wave orientation $\theta_k=\pi/4$ are fixed. The only full-field extremization variable is the stencil-center index $i\in\mathcal I_{\Omega}$. Curves for other wave orientations should be generated separately rather than by maximizing over $\theta_k$.
+
+The minimum set of reported curves for each stencil model $\ell$ is therefore
+\begin{equation}
+    \alpha_{\ell}^{\max},
+    \qquad
+    \alpha_{\ell}^{\min},
+    \qquad
+    \Phi_{\ell}^{\max},
+    \label{eq:recommended-curves}
+\end{equation}
+plotted either against the physical wavenumber $k$ or against the nominal Nyquist-normalized wavenumber $\kappa$, with the selected convention stated explicitly.
+
+\subsection*{Elementary consistency checks}
+
+The following properties should hold before any spectral curve is interpreted:
+\begin{align}
+    G_{i\ell}(0,0;\bm{\delta}_d)&=1,
+    \label{eq:constant-mode-check}\\
+    G_{i\ell}(-k_n,-k_m;\bm{\delta}_d)
+    &=
+    G_{i\ell}(k_n,k_m;\bm{\delta}_d)^{*}
+    \quad\text{for real weights},
+    \label{eq:conjugate-symmetry-check}\\
+    |G_{i\ell}|&\rightarrow1,
+    \qquad
+    \Arg(G_{i\ell})\rightarrow0
+    \quad\text{as}\quad k\rightarrow0.
+    \label{eq:low-wavenumber-check}
+\end{align}
+The first identity follows exactly from the difference form in \cref{eq:interpolation-operator}; the center-inclusive definition of $\mathcal S_{i\ell}$ does not alter it because the $j=i$ contribution is zero.
+
+\begin{thebibliography}{9}
+\bibitem{Desvigne2010}
+D.~Desvigne, O.~Marsden, C.~Bogey, and C.~Bailly,
+``Development of noncentered wavenumber-based optimized interpolation schemes with amplification control for overlapping grids,''
+\emph{SIAM Journal on Scientific Computing}, vol.~32, no.~4, pp.~2074--2098, 2010.
+\href{https://doi.org/10.1137/090758702}{doi:10.1137/090758702}.
+\end{thebibliography}
+
+\end{document}

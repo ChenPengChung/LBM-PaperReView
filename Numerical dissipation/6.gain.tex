@@ -1,0 +1,225 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=25mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,mathtools,bm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\numberwithin{equation}{section}
+\DeclareMathOperator{\Arg}{Arg}
+\newcommand{\ii}{\mathrm{i}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\pospart}[1]{\left[#1\right]_{+}}
+
+\title{Fourier Gain and Phase-Error Characterization\\
+of a Local LABFM Interpolation Operator}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A single Fourier mode is used to characterize the local amplitude and phase distortions introduced by a LABFM interpolation operator. Three mathematically equivalent representations are developed. First, the complex amplification function is derived entirely in dimensional coordinates and dimensional wavenumbers. Second, the spatial coordinates and wavenumbers are nondimensionalized consistently, with an additional Nyquist-normalized wavenumber introduced for spectral plotting. Third, only the spatial coordinates are scaled while the physical wavenumber components are retained. Throughout the primary analysis, the departure displacement and Fourier-wave orientation are prescribed, and the full-field extrema are taken only over the stencil centers in the computational domain. The stencil label $\ell$ uniquely identifies a local stencil model and is not required to equal its cardinality.
+\end{abstract}
+
+\section{Dimensional Fourier formulation}
+\label{sec:dimensional}
+
+\subsection{Geometric and stencil notation}
+
+Let $\Omega\subset\R^2$ be the computational domain and let
+\begin{equation}
+    \mathcal I_{\Omega}
+    =
+    \left\{i:\bm{x}_i\in\Omega\right\}
+    \label{eq:center-index-set}
+\end{equation}
+be the set of admissible stencil-center indices. The index $i$ denotes a stencil center and $j$ denotes a node belonging to the corresponding local stencil. Their positions are
+\begin{equation}
+    \bm{x}_i=(x_i,y_i)^{\mathsf T},
+    \qquad
+    \bm{x}_j=(x_j,y_j)^{\mathsf T}.
+    \label{eq:center-node-coordinates}
+\end{equation}
+The relative coordinates of node $j$ with respect to center $i$ are
+\begin{equation}
+    x_{ji}=x_j-x_i,
+    \qquad
+    y_{ji}=y_j-y_i.
+    \label{eq:relative-node-coordinates}
+\end{equation}
+
+The departure point used in the primary analysis is prescribed rather than scanned. Its position relative to center $i$ is
+\begin{equation}
+    \bm{\delta}_d
+    =
+    \bm{x}_d-\bm{x}_i
+    =
+    \begin{bmatrix}
+        x_{di}\\[1mm]
+        y_{di}
+    \end{bmatrix},
+    \qquad
+    x_{di}=x_d-x_i,
+    \qquad
+    y_{di}=y_d-y_i.
+    \label{eq:departure-displacement}
+\end{equation}
+The symbol $d$ therefore identifies the fixed departure point used in the analysis; it is not an index over which a full-field extremum is taken.
+
+For each center $i$, the set $\mathcal S_{i\ell}$ denotes one complete local stencil and contains the center itself,
+\begin{equation}
+    i\in\mathcal S_{i\ell}.
+    \label{eq:center-in-stencil}
+\end{equation}
+The symbol $\ell$ is a unique stencil-model label. It may be numerical, for example
+\begin{equation}
+    \ell\in\{10,15,17,31,\ldots\},
+    \label{eq:numerical-stencil-labels}
+\end{equation}
+or symbolic, for example $\ell\in\{a,b,c,d,\ldots\}$. When a numerical label is used, it commonly coincides with the total number of stencil nodes, including the center, but no algebraic step below requires the identity $|\mathcal S_{i\ell}|=\ell$. The only required property is that the pair $(i,\ell)$ uniquely identifies one local interpolation model.
+
+The local interpolation of a scalar field $f$ at the prescribed departure displacement is written in difference form as
+\begin{equation}
+    \widetilde f_{i\ell}\!\left(\bm{\delta}_d\right)
+    =
+    f\!\left(\bm{x}_i\right)
+    +
+    \sum_{j\in\mathcal S_{i\ell}}
+    w_{ji,d}^{(\ell)}
+    \left[
+        f\!\left(\bm{x}_j\right)
+        -
+        f\!\left(\bm{x}_i\right)
+    \right].
+    \label{eq:interpolation-operator}
+\end{equation}
+Because $i\in\mathcal S_{i\ell}$, the summand corresponding to $j=i$ vanishes identically. The center weight may therefore be set to $w_{ii,d}^{(\ell)}=0$ without loss of generality, and a separate stencil set excluding the center is unnecessary.
+
+\subsection{Single Fourier mode and discrete response}
+
+Let $k_n$ and $k_m$ be the dimensional wavenumber components in the $x$- and $y$-directions, respectively. The continuous Fourier probing function is
+\begin{equation}
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}\right)
+    =
+    \exp\!\left[\ii\left(k_nx+k_my\right)\right],
+    \qquad
+    \bm{x}=(x,y)^{\mathsf T},
+    \qquad
+    \ii^2=-1.
+    \label{eq:fourier-mode}
+\end{equation}
+The superscript ${\mathrm F}$ identifies the Fourier mode. Since $f^{\mathrm F}$ is a continuous function, a spatial location is supplied as a function argument rather than as a discrete subscript.
+
+At node $j$ and at the departure point,
+\begin{subequations}
+\label{eq:fourier-relative-values}
+\begin{align}
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_j\right)
+    &=
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    \exp\!\left[\ii\left(k_nx_{ji}+k_my_{ji}\right)\right],
+    \label{eq:fourier-at-node}\\
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i+\bm{\delta}_d\right)
+    &=
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    \exp\!\left[\ii\left(k_nx_{di}+k_my_{di}\right)\right].
+    \label{eq:fourier-at-departure}
+\end{align}
+\end{subequations}
+
+Substitution of \cref{eq:fourier-mode} into \cref{eq:interpolation-operator} gives the discrete Fourier response of the local model $(i,\ell)$:
+\begin{align}
+    \widetilde f^{\mathrm F}_{i\ell}
+    \!\left(k_n,k_m;\bm{\delta}_d\right)
+    &=
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    +
+    \sum_{j\in\mathcal S_{i\ell}}
+    w_{ji,d}^{(\ell)}
+    \left[
+        f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_j\right)
+        -
+        f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    \right]
+    \nonumber\\
+    &=
+    f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i\right)
+    \left[
+        1+
+        \sum_{j\in\mathcal S_{i\ell}}
+        w_{ji,d}^{(\ell)}
+        \left\{
+            \exp\!\left[\ii\left(k_nx_{ji}+k_my_{ji}\right)\right]-1
+        \right\}
+    \right].
+    \label{eq:discrete-fourier-response}
+\end{align}
+Only the discrete approximation carries the subscript pair $(i,\ell)$. The wavenumber components and the departure displacement remain function arguments.
+
+\subsection{Complex amplification function, gain factor, and phase error}
+
+The local complex amplification function is defined as the ratio between the discrete Fourier response and the exact continuous Fourier value at the same departure point:
+\begin{equation}
+    \boxed{
+    G_{i\ell}\!\left(k_n,k_m;\bm{\delta}_d\right)
+    =
+    \frac{
+        \widetilde f^{\mathrm F}_{i\ell}
+        \!\left(k_n,k_m;\bm{\delta}_d\right)
+    }{
+        f^{\mathrm F}\!\left(k_n,k_m;\bm{x}_i+\bm{\delta}_d\right)
+    }.
+    }
+    \label{eq:G-definition}
+\end{equation}
+Using \cref{eq:fourier-at-departure,eq:discrete-fourier-response},
+\begin{equation}
+\boxed{
+\begin{aligned}
+    G_{i\ell}\!\left(k_n,k_m;\bm{\delta}_d\right)
+    &=
+    \exp\!\left[-\ii\left(k_nx_{di}+k_my_{di}\right)\right]
+    \\
+    &\quad\times
+    \left[
+        1+
+        \sum_{j\in\mathcal S_{i\ell}}
+        w_{ji,d}^{(\ell)}
+        \left\{
+            \exp\!\left[\ii\left(k_nx_{ji}+k_my_{ji}\right)\right]-1
+        \right\}
+    \right].
+\end{aligned}
+}
+\label{eq:G-dimensional}
+\end{equation}
+No normalization has been introduced in \cref{eq:G-dimensional}. Every exponential argument is dimensionless because $[k_n]=[k_m]=L^{-1}$ and all coordinate differences have units of length. The arbitrary absolute phase at $\bm{x}_i$ has cancelled exactly. An exact interpolation gives
+\begin{equation}
+    G_{i\ell}=1.
+    \label{eq:exact-G}
+\end{equation}
+
+The local gain factor is the modulus of the complex amplification function:
+\begin{equation}
+    \boxed{
+    \alpha_{i\ell}^{\mathrm{loc}}
+    \!\left(k_n,k_m;\bm{\delta}_d\right)
+    =
+    \left|
+        G_{i\ell}\!\left(k_n,k_m;\bm{\delta}_d\right)
+    \right|.
+    }
+    \label{eq:local-gain}
+\end{equation}
+
+\end{document}
