@@ -1,0 +1,20 @@
+以下為2026至今最新公開數據整理名單與網址
+對於cylinder，Re3900 turbulence 
+有兩組公開論文以及數據收錄在INRAE research gate裡面 
+1.DNS (論文對應數據)
+論文 : Lagrangian and Eulerian dataset of the wake
+downstream of a smooth cylinder at a
+Reynolds number equal to 3900
+數據網址:https://entrepot.recherche.data.gouv.fr/dataset.xhtml?persistentId=doi:10.15454/GLNRHK
+作者:Khojasteh
+年分:2022
+2.PIV (論文)
+論文: Experimental and numerical studies of the flow over a
+circular cylinder at Reynolds number 3900
+作者:Pamaudeau
+年分:2008
+3.PIV (數據) 
+論文:
+數據網址:https://entrepot.recherche.data.gouv.fr/dataset.xhtml?persistentId=doi%3A10.57745%2FDHJXM6
+作者:Gruhlke
+年份:2026-2-19
